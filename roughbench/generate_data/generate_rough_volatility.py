@@ -4,7 +4,7 @@ import jax.numpy as jnp
 import jax.scipy.stats
 from roughbench.rde.rough_volatility import BonesiniModelSpec
 from pathlib import Path
-from utils import save_plot, save_npy
+from utils import save_plot, save_npz_compressed
 
 
 def plot_bonesini_rde(solution: dfx.Solution | list[dfx.Solution], model_spec: BonesiniModelSpec | list[BonesiniModelSpec], output_dir: Path | None = None) -> None:
@@ -42,7 +42,7 @@ def plot_bonesini_rde(solution: dfx.Solution | list[dfx.Solution], model_spec: B
     save_plot(filename=filename, subdir="rough_volatility", data_dir=output_dir)
 
 
-def plot_bonesini_monte_carlo(solution: dfx.Solution, model_spec: BonesiniModelSpec, plot_variance: bool = False, use_log_price: bool = True, output_dir: Path | None = None) -> None:
+def plot_bonesini_monte_carlo(solution: dfx.Solution, model_spec: BonesiniModelSpec, X_drivers: jax.Array | None = None, W_drivers: jax.Array | None = None, plot_variance: bool = False, use_log_price: bool = True, output_dir: Path | None = None) -> None:
     try:
         import matplotlib.pyplot as plt  # type: ignore
         fig, (ax_main, ax_marginal) = plt.subplots(1, 2, figsize=(12, 6), gridspec_kw={"width_ratios": [3, 1]})
@@ -132,9 +132,24 @@ def plot_bonesini_monte_carlo(solution: dfx.Solution, model_spec: BonesiniModelS
     filename = f"{model_spec.name.lower().replace(' ', '_')}_monte_carlo.png"
     save_plot(filename=filename, subdir="rough_volatility", data_dir=output_dir)
 
-    # Save arrays under data/rough_volatility only (prices and optional variance)
+    # Save solution and drivers as compressed .npz
     ys_paths = jnp.asarray(solution.ys)
-    save_npy(ys_paths, filename=f"{model_spec.name.lower().replace(' ', '_')}_paths.npy", subdir="rough_volatility", data_dir=output_dir)
+    
+    # Stack X and W drivers into a single array (batch, timesteps+1, 2) if available
+    if X_drivers is not None and W_drivers is not None:
+        # Stack along last axis: [:, :, 0] is X, [:, :, 1] is W
+        drivers = jnp.stack([X_drivers, W_drivers], axis=-1)
+    else:
+        # No drivers provided, create a dummy array
+        drivers = jnp.zeros((ys_paths.shape[0], 1, 2))
+    
+    save_npz_compressed(
+        solution=ys_paths,
+        driver=drivers,
+        filename=f"{model_spec.name.lower().replace(' ', '_')}_data.npz",
+        subdir="rough_volatility",
+        data_dir=output_dir
+    )
 
 
 if __name__ == "__main__":
@@ -159,7 +174,7 @@ if __name__ == "__main__":
     y0_bs, X_bs, W_bs = jax.vmap(lambda key: get_bonesini_noise_drivers(key, noise_timesteps, black_scholes_model_spec, s_0=1.0))(keys_bs)
     solve_vmap_bs = jax.vmap(lambda y0, X, W: solve_bonesini_rde_from_drivers(y0, X, W, black_scholes_model_spec, noise_timesteps, rde_timesteps))
     solutions_bs = solve_vmap_bs(y0_bs, X_bs, W_bs)
-    plot_bonesini_monte_carlo(solutions_bs, black_scholes_model_spec, output_dir=output_dir)
+    plot_bonesini_monte_carlo(solutions_bs, black_scholes_model_spec, X_drivers=X_bs, W_drivers=W_bs, output_dir=output_dir)
 
     # BERGOMI
     print("Generating Bergomi Monte Carlo...")
@@ -168,7 +183,7 @@ if __name__ == "__main__":
     y0_b, X_b, W_b = jax.vmap(lambda key: get_bonesini_noise_drivers(key, noise_timesteps, bergomi_model_spec, s_0=1.0))(keys_b)
     solve_vmap_b = jax.vmap(lambda y0, X, W: solve_bonesini_rde_from_drivers(y0, X, W, bergomi_model_spec, noise_timesteps, rde_timesteps))
     solutions_b = solve_vmap_b(y0_b, X_b, W_b)
-    plot_bonesini_monte_carlo(solutions_b, bergomi_model_spec, output_dir=output_dir)
+    plot_bonesini_monte_carlo(solutions_b, bergomi_model_spec, X_drivers=X_b, W_drivers=W_b, output_dir=output_dir)
 
     # ROUGH BERGOMI
     print("Generating Rough Bergomi Monte Carlo...")
@@ -177,6 +192,6 @@ if __name__ == "__main__":
     y0_rb, X_rb, W_rb = jax.vmap(lambda key: get_bonesini_noise_drivers(key, noise_timesteps, rough_bergomi_model_spec, s_0=100.0))(keys_rb)
     solve_vmap_rb = jax.vmap(lambda y0, X, W: solve_bonesini_rde_from_drivers(y0, X, W, rough_bergomi_model_spec, noise_timesteps, rde_timesteps))
     solutions_rb = solve_vmap_rb(y0_rb, X_rb, W_rb)
-    plot_bonesini_monte_carlo(solutions_rb, rough_bergomi_model_spec, use_log_price=True, output_dir=output_dir)
+    plot_bonesini_monte_carlo(solutions_rb, rough_bergomi_model_spec, X_drivers=X_rb, W_drivers=W_rb, use_log_price=True, output_dir=output_dir)
 
     print("\nAll rough volatility plots saved to generate_data/rough_volatility and docs/rde_bench/rough_volatility")

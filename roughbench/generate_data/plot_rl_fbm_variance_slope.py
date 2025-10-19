@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 from pathlib import Path
-from utils import save_plot, save_npy
+from utils import save_plot, save_npz_compressed
 
 from roughbench.rde.rp_kalman import compute_fractional_brownian_increment
 
@@ -78,8 +78,16 @@ def main(output_dir: Path | None = None, timesteps: int = 1000, hurst: float = 0
     filename = f"rl_fbm_variance_slope_H{hurst:.2f}.png"
     save_plot(filename=filename, subdir="drivers", data_dir=output_dir)
 
-    # Save a tiny npy file with [slope, expected, abs_error]
-    save_npy(jnp.array([slope, expected, err]), filename=f"rl_fbm_variance_slope_H{hurst:.2f}.npy", subdir="drivers", data_dir=output_dir)
+    # Save diagnostic metrics as compressed .npz
+    # For diagnostics: solution=metrics array, driver=empty placeholder
+    metrics = jnp.array([slope, expected, err])
+    save_npz_compressed(
+        solution=metrics,
+        driver=jnp.array([]),  # No driver for diagnostic data
+        filename=f"rl_fbm_variance_slope_H{hurst:.2f}.npz",
+        subdir="drivers",
+        data_dir=output_dir
+    )
 
 
 if __name__ == "__main__":

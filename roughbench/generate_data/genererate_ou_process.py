@@ -2,7 +2,8 @@ import jax
 import jax.numpy as jnp
 from pathlib import Path
 from roughbench.rde.ou_process import ou_process
-from utils import save_plot, save_npy
+from quicksig.drivers.drivers import bm_driver
+from utils import save_plot, save_npz_compressed
 
 
 def plot_ou_monte_carlo(
@@ -33,6 +34,12 @@ def plot_ou_monte_carlo(
     key = jax.random.PRNGKey(seed)
     keys = jax.random.split(key, batch_size)
     
+    # Generate Brownian motion drivers (same as used internally by ou_process)
+    batched_bm_drivers = jax.vmap(
+        bm_driver,
+        in_axes=(0, None, None)
+    )(keys, timesteps, dim)
+    
     # Vectorize over multiple paths
     batched_ou_paths = jax.vmap(
         ou_process,
@@ -40,6 +47,7 @@ def plot_ou_monte_carlo(
     )(keys, timesteps, dim, theta, mu, sigma, x0)
     
     ou_paths_np = jax.device_get(batched_ou_paths.path)
+    bm_drivers_np = jax.device_get(batched_bm_drivers.path)
     
     # Plot only if matplotlib is available
     try:
@@ -59,8 +67,14 @@ def plot_ou_monte_carlo(
     filename = "ou_process_monte_carlo.png"
     save_plot(filename=filename, subdir="ou_processes", data_dir=output_dir, dpi=150)
     
-    # Save arrays under data/ou_processes only (before printing stats)
-    save_npy(ou_paths_np, filename="ou_process_paths.npy", subdir="ou_processes", data_dir=output_dir)
+    # Save solution and driver as compressed .npz
+    save_npz_compressed(
+        solution=ou_paths_np,
+        driver=bm_drivers_np,
+        filename="ou_process_data.npz",
+        subdir="ou_processes",
+        data_dir=output_dir
+    )
 
     # E[X_t] = μ + (X_0 - μ)e^(-θt) at t=1.0
     T = 1.0

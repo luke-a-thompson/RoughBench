@@ -76,3 +76,27 @@ def save_npy(array: object, filename: str, subdir: str, data_dir: Path | None = 
     return target
 
 
+def save_npz_compressed(solution: object, driver: object, filename: str, subdir: str, data_dir: Path | None = None, verbose: bool = True) -> Path:
+    """Save solution and driver arrays as compressed .npz under <repo>/data/<subdir>/filename.
+
+    Args:
+        solution: Solution array (trajectories)
+        driver: Driver array (noise/control)
+        filename: Output filename (should end in .npz)
+        subdir: Subdirectory under data/
+        data_dir: Optional override for data directory
+        verbose: Print save confirmation
+
+    Returns:
+        Path to saved file
+
+    This does not write anything to docs by design.
+    """
+    data_path, _ = resolve_output_dirs(subdir=subdir, data_dir=data_dir)
+    target = data_path / filename
+    np.savez_compressed(target, solution=np.asarray(solution), driver=np.asarray(driver))
+    if verbose:
+        print(f"Saved compressed data (solution + driver) to {target}")
+    return target
+
+

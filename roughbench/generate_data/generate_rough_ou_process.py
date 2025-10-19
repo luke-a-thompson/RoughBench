@@ -2,7 +2,8 @@ import jax
 import jax.numpy as jnp
 from pathlib import Path
 from roughbench.rde.rough_ou_process import rough_ou_process
-from utils import save_plot, save_npy
+from quicksig.drivers.drivers import fractional_bm_driver
+from utils import save_plot, save_npz_compressed
 
 
 def plot_rough_ou_monte_carlo(
@@ -35,6 +36,12 @@ def plot_rough_ou_monte_carlo(
     key = jax.random.PRNGKey(seed)
     keys = jax.random.split(key, batch_size)
     
+    # Generate fractional Brownian motion drivers (same as used internally by rough_ou_process)
+    batched_fbm_drivers = jax.vmap(
+        fractional_bm_driver,
+        in_axes=(0, None, None, None)
+    )(keys, timesteps, dim, hurst)
+    
     # Vectorize over multiple paths
     batched_rough_ou_paths = jax.vmap(
         rough_ou_process,
@@ -42,6 +49,7 @@ def plot_rough_ou_monte_carlo(
     )(keys, timesteps, dim, theta, mu, sigma, hurst, x0)
     
     rough_ou_paths_np = jax.device_get(batched_rough_ou_paths.path)
+    fbm_drivers_np = jax.device_get(batched_fbm_drivers.path)
     
     try:
         import matplotlib.pyplot as plt  # type: ignore
@@ -60,8 +68,14 @@ def plot_rough_ou_monte_carlo(
     filename = f"rough_ou_process_H{hurst:.2f}_monte_carlo.png"
     save_plot(filename=filename, subdir="rough_ou_processes", data_dir=output_dir, dpi=150)
     
-    # Save arrays under data/rough_ou_processes only (before printing stats)
-    save_npy(rough_ou_paths_np, filename=f"rough_ou_paths_H{hurst:.2f}.npy", subdir="rough_ou_processes", data_dir=output_dir)
+    # Save solution and driver as compressed .npz
+    save_npz_compressed(
+        solution=rough_ou_paths_np,
+        driver=fbm_drivers_np,
+        filename=f"rough_ou_data_H{hurst:.2f}.npz",
+        subdir="rough_ou_processes",
+        data_dir=output_dir
+    )
 
     # E[X_t] = μ + (X_0 - μ)e^(-θt) at t=1.0 (same as regular OU)
     T = 1.0
