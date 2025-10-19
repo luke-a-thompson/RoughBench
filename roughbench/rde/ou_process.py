@@ -1,8 +1,8 @@
 import jax
 import jax.numpy as jnp
 import diffrax as dfx
-from roughbench.rde.drivers import bm_driver
-from roughbench.rde_types.paths import Path
+from quicksig.drivers.drivers import bm_driver
+from quicksig.paths.paths import Path
 
 
 def ou_process(

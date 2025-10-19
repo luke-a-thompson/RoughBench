@@ -33,7 +33,7 @@ classifiers = [
 dependencies = [
     "jax>=0.6.0",
     "diffrax>=0.7.0",
-    "quicksig @ git+https://github.com/luke-a-thompson/QuickSig.git",
+    "quicksig @ git+https://github.com/luke-a-thompson/QuickSig.git@master",
 ]
 
 [project.urls]

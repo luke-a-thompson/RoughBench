@@ -1360,8 +1360,8 @@ wheels = [
 
 [[package]]
 name = "quicksig"
-version = "0.1.2"
-source = { git = "https://github.com/luke-a-thompson/QuickSig.git#7a55db611dea8c4bb577f18fa7ebad4dfb3845d0" }
+version = "0.2.0"
+source = { git = "https://github.com/luke-a-thompson/QuickSig.git?rev=master#e2b75dadfb88329890687ad463ca2cd21496c42c" }
 dependencies = [
     { name = "diffrax" },
     { name = "jax" },
@@ -1417,7 +1417,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.5" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.1.1" },
     { name = "pytest-timeout", marker = "extra == 'dev'", specifier = ">=2.3.1" },
-    { name = "quicksig", git = "https://github.com/luke-a-thompson/QuickSig.git" },
+    { name = "quicksig", git = "https://github.com/luke-a-thompson/QuickSig.git?rev=master" },
     { name = "roughbench", extras = ["cuda", "dev"], marker = "extra == 'all'" },
     { name = "signax", marker = "extra == 'dev'", specifier = ">=0.2.1" },
     { name = "tqdm", marker = "extra == 'dev'", specifier = ">=4.67.1" },

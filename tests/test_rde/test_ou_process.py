@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 from roughbench.rde.ou_process import ou_process
-from roughbench.rde_types.paths import Path
+from quicksig.paths.paths import Path
 
 
 @pytest.fixture(scope="module")
