@@ -1,0 +1,12 @@
+[general]
+batch_size = 1000
+seed = 42
+
+[parameters]
+timesteps = 512
+hurst = 0.7
+dim = 1
+theta = 0.5
+mu = 0.0
+sigma = 0.3
+x0 = 1.0
