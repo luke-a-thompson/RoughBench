@@ -9,12 +9,7 @@ authors = [{ name = "Luke Thompson", email = "luke.thompson@sydney.edu.au" }]
 maintainers = [
     { name = "Luke Thompson", email = "luke.thompson@sydney.edu.au" },
 ]
-keywords = [
-    "jax",
-    "rough-paths",
-    "machine-learning",
-    "time-series",
-]
+keywords = ["jax", "rough-paths", "machine-learning", "time-series"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -60,6 +55,9 @@ all = ["roughbench[cuda,dev]"]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 120
 
 [tool.hatch.metadata]
 allow-direct-references = true
