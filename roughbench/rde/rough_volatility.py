@@ -2,10 +2,13 @@ from dataclasses import dataclass
 import jax
 import jax.numpy as jnp
 from jax import Array
-from quicksig.drivers.drivers import bm_driver, correlate_bm_driver_against_reference, riemann_liouville_driver
+from quicksig.drivers.drivers import (
+    bm_driver,
+    correlate_bm_driver_against_reference,
+    riemann_liouville_driver,
+)
 from typing import Callable
 import diffrax as dfx
-from diffrax import LinearInterpolation
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,7 +53,12 @@ class BonesiniModelSpec:
         def _is_jax_array(x):
             return isinstance(x, jax.Array)
 
-        if _is_jax_array(self.hurst) or _is_jax_array(self.v_0) or (self.nu is not None and _is_jax_array(self.nu)) or (self.rho is not None and _is_jax_array(self.rho)):
+        if (
+            _is_jax_array(self.hurst)
+            or _is_jax_array(self.v_0)
+            or (self.nu is not None and _is_jax_array(self.nu))
+            or (self.rho is not None and _is_jax_array(self.rho))
+        ):
             return
 
         if not (0.0 < float(self.hurst) < 1.0):
@@ -206,7 +214,9 @@ def get_bonesini_noise_drivers(
     return y_0, X, W
 
 
-def solve_bonesini_rde_wong_zakai(y_0: jax.Array, terms: dfx.MultiTerm, noise_timesteps: int, rde_timesteps: int) -> dfx.Solution:
+def solve_bonesini_rde_wong_zakai(
+    y_0: jax.Array, terms: dfx.MultiTerm, noise_timesteps: int, rde_timesteps: int
+) -> dfx.Solution:
     if noise_timesteps > rde_timesteps:
         raise ValueError("Noise timesteps must be less than or equal to RDE timesteps.")
 

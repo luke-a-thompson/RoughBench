@@ -1,15 +1,21 @@
 import jax
 import jax.numpy as jnp
-import matplotlib.pyplot as plt
 from pathlib import Path
-from utils import save_plot, save_npz_compressed
+from utils import (
+    save_plot,
+    save_npz_compressed,
+    plotting_context,
+    create_figure,
+    decorate_axes,
+    finalize_plot,
+)
 
 from roughbench.rde.rp_kalman import compute_fractional_brownian_increment
 
 
 def generate_rlfbm_path(H: float, dW: jax.Array, t: jax.Array, Z: jax.Array) -> jax.Array:
     """
-    Generate a single Riemann–Liouville fBM path using compute_fractional_brownian_increment.
+    Generate a single Riemann-Liouville fBM path using compute_fractional_brownian_increment.
 
     Returns an array of shape (K+1,) with X_0 = 0 and cumulative sum of increments.
     """
@@ -24,7 +30,13 @@ def generate_rlfbm_path(H: float, dW: jax.Array, t: jax.Array, Z: jax.Array) -> 
     return X
 
 
-def simulate_variance_slope(seed: int = 0, timesteps: int = 1000, hurst: float = 0.2, num_paths: int = 500, T: float = 1.0) -> tuple[float, float]:
+def simulate_variance_slope(
+    seed: int = 0,
+    timesteps: int = 1000,
+    hurst: float = 0.2,
+    num_paths: int = 500,
+    T: float = 1.0,
+) -> tuple[float, float]:
     """
     Simulate many RL-fBM paths and compute slope of log Var[X_t] vs log t.
 
@@ -60,23 +72,36 @@ def simulate_variance_slope(seed: int = 0, timesteps: int = 1000, hurst: float =
     return float(slope), float(expected)
 
 
-def main(output_dir: Path | None = None, timesteps: int = 1000, hurst: float = 0.2, num_paths: int = 500, T: float = 1.0, seed: int = 123) -> None:
+def main(
+    output_dir: Path | None = None,
+    timesteps: int = 1000,
+    hurst: float = 0.2,
+    num_paths: int = 500,
+    T: float = 1.0,
+    seed: int = 123,
+) -> None:
     slope, expected = simulate_variance_slope(seed=seed, timesteps=timesteps, hurst=hurst, num_paths=num_paths, T=T)
     err = abs(slope - expected)
     print(f"slope={slope:.4f}, expected=2H={expected:.4f}, abs_error={err:.4f}")
 
     # Simple diagnostic plot: nothing fancy, just a bar of slope vs expected
-    plt.figure(figsize=(6, 4))
-    xs = jnp.array([0, 1])
-    ys = jnp.array([slope, expected])
-    labels = ["estimated", "expected"]
-    plt.bar(xs, ys, color=["tab:blue", "tab:orange"])
-    plt.xticks(xs, labels)
-    plt.ylabel("slope of log Var vs log t")
-    plt.title(f"RL-fBM slope check (H={hurst})")
+    with plotting_context(font_scale=1.0):
+        _, ax = create_figure(figsize=(6.0, 4.0))
+        xs = jnp.array([0, 1])
+        ys = jnp.array([slope, expected])
+        labels = ["estimated", "expected"]
+        ax.bar(xs, ys, color=["tab:blue", "tab:orange"])
+        ax.set_xticks(xs)
+        ax.set_xticklabels(labels)
+        decorate_axes(
+            ax,
+            title=f"RL-fBM slope check (H={hurst})",
+            ylabel="slope of log Var vs log t",
+        )
+        finalize_plot(tight_layout=True)
 
     filename = f"rl_fbm_variance_slope_H{hurst:.2f}.png"
-    save_plot(filename=filename, subdir="drivers", data_dir=output_dir)
+    save_plot(filename=filename, subdir="drivers", data_dir=output_dir, dpi=200)
 
     # Save diagnostic metrics as compressed .npz
     # For diagnostics: solution=metrics array, driver=empty placeholder
@@ -86,7 +111,7 @@ def main(output_dir: Path | None = None, timesteps: int = 1000, hurst: float = 0
         driver=jnp.array([]),  # No driver for diagnostic data
         filename=f"rl_fbm_variance_slope_H{hurst:.2f}.npz",
         subdir="drivers",
-        data_dir=output_dir
+        data_dir=output_dir,
     )
 
 

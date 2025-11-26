@@ -3,13 +3,11 @@ import matplotlib.animation as animation
 from matplotlib.patches import Ellipse
 import jax
 import jax.numpy as jnp
-from typing import Any, Optional
 from pathlib import Path
 
 from roughbench.rde.rp_kalman import (
     RBergomiEnsemble,
     constrain_theta,
-    run_ensemble_kalman_filter,
     sample_unconstrained_priors,
     simulate_observation_logS,
     ensemble_kalman_filter_step,
@@ -63,9 +61,13 @@ def track_ensemble_evolution(
         # Store results
         H_k, nu_k, rho_k, v0_k = constrain_theta(ens.tH, ens.tNu, ens.tRho, ens.tV0)
         constrained_history = constrained_history.at[k + 1].set(jnp.stack([H_k, nu_k, rho_k, v0_k], axis=1))
-        unconstrained_history = unconstrained_history.at[k + 1].set(jnp.stack([ens.tH, ens.tNu, ens.tRho, ens.tV0], axis=1))
+        unconstrained_history = unconstrained_history.at[k + 1].set(
+            jnp.stack([ens.tH, ens.tNu, ens.tRho, ens.tV0], axis=1)
+        )
         state_history = state_history.at[k + 1].set(jnp.stack([ens.S, ens.V], axis=1))
-        mean_history = mean_history.at[k + 1].set(jnp.array([jnp.mean(H_k), jnp.mean(nu_k), jnp.mean(rho_k), jnp.mean(v0_k)]))
+        mean_history = mean_history.at[k + 1].set(
+            jnp.array([jnp.mean(H_k), jnp.mean(nu_k), jnp.mean(rho_k), jnp.mean(v0_k)])
+        )
         std_history = std_history.at[k + 1].set(jnp.array([jnp.std(H_k), jnp.std(nu_k), jnp.std(rho_k), jnp.std(v0_k)]))
 
     return {
@@ -79,7 +81,10 @@ def track_ensemble_evolution(
 
 
 def plot_parameter_cloud_evolution(
-    evolution_data: dict[str, jax.Array], true_params: dict[str, float], param_pairs: Optional[list[tuple[str, str]]] = None, save_path: Optional[Path] = None
+    evolution_data: dict[str, jax.Array],
+    true_params: dict[str, float],
+    param_pairs: list[tuple[str, str]] | None = None,
+    save_path: Path | None = None,
 ) -> None:
     """
     Plot 2D projections of parameter cloud evolution.
@@ -104,7 +109,7 @@ def plot_parameter_cloud_evolution(
     axes = axes.flatten()
 
     # Color map for time evolution
-    colors = plt.cm.viridis(jnp.linspace(0, 1, K + 1))
+    colors = plt.get_cmap("viridis")(jnp.linspace(0, 1, K + 1))
 
     for idx, (param1, param2) in enumerate(param_pairs):
         ax = axes[idx]
@@ -122,7 +127,14 @@ def plot_parameter_cloud_evolution(
             alpha = 0.3 if i < len(time_points) - 1 else 0.8
             size = 15 if i < len(time_points) - 1 else 25
 
-            ax.scatter(p1_vals, p2_vals, c=[colors[t_idx]], alpha=alpha, s=size, label=f"t={time_grid[t_idx]:.2f}")
+            ax.scatter(
+                p1_vals,
+                p2_vals,
+                c=[colors[t_idx]],
+                alpha=alpha,
+                s=size,
+                label=f"t={time_grid[t_idx]:.2f}",
+            )
 
             # Add confidence ellipse for final time point
             if i == len(time_points) - 1:
@@ -134,11 +146,29 @@ def plot_parameter_cloud_evolution(
                 angle = jnp.degrees(jnp.arctan2(eigenvecs[1, 0], eigenvecs[0, 0]))
                 width, height = 2 * 2 * jnp.sqrt(eigenvals)  # 2σ ellipse
 
-                ellipse = Ellipse((mean_p1, mean_p2), width, height, angle=angle, fill=False, color="red", linestyle="--", linewidth=2, label="95% confidence")
+                ellipse = Ellipse(
+                    (float(mean_p1), float(mean_p2)),
+                    width,
+                    height,
+                    angle=float(angle),
+                    fill=False,
+                    color="red",
+                    linestyle="--",
+                    linewidth=2,
+                    label="95% confidence",
+                )
                 ax.add_patch(ellipse)
 
         # Mark true parameter values
-        ax.plot(true_params[param1], true_params[param2], "r*", markersize=15, label="True values", markeredgecolor="black", markeredgewidth=1)
+        ax.plot(
+            true_params[param1],
+            true_params[param2],
+            "r*",
+            markersize=15,
+            label="True values",
+            markeredgecolor="black",
+            markeredgewidth=1,
+        )
 
         ax.set_xlabel(param1)
         ax.set_ylabel(param2)
@@ -158,7 +188,11 @@ def plot_parameter_cloud_evolution(
     plt.show()
 
 
-def plot_ensemble_statistics_evolution(evolution_data: dict[str, jax.Array], true_params: dict[str, float], save_path: Optional[Path] = None) -> None:
+def plot_ensemble_statistics_evolution(
+    evolution_data: dict[str, jax.Array],
+    true_params: dict[str, float],
+    save_path: Path | None = None,
+) -> None:
     """
     Plot time series of ensemble mean and spread evolution.
     """
@@ -182,7 +216,13 @@ def plot_ensemble_statistics_evolution(evolution_data: dict[str, jax.Array], tru
         ax.fill_between(time_grid, lower, upper, alpha=0.3, color="blue", label="±2σ band")
 
         # Plot true value
-        ax.axhline(true_params[param], color="red", linestyle="--", linewidth=2, label="True value")
+        ax.axhline(
+            true_params[param],
+            color="red",
+            linestyle="--",
+            linewidth=2,
+            label="True value",
+        )
 
         ax.set_xlabel("Time")
         ax.set_ylabel(param)
@@ -203,7 +243,10 @@ def plot_ensemble_statistics_evolution(evolution_data: dict[str, jax.Array], tru
 
 
 def create_parameter_cloud_animation(
-    evolution_data: dict[str, jax.Array], true_params: dict[str, float], param_pair: tuple[str, str] = ("H", "rho"), save_path: Optional[Path] = None
+    evolution_data: dict[str, jax.Array],
+    true_params: dict[str, float],
+    param_pair: tuple[str, str] = ("H", "rho"),
+    save_path: Path | None = None,
 ) -> None:
     """
     Create animated visualization of parameter cloud evolution.
@@ -231,7 +274,15 @@ def create_parameter_cloud_animation(
     ax.set_ylim(jnp.min(p2_all) - 0.1 * p2_range, jnp.max(p2_all) + 0.1 * p2_range)
 
     # Mark true values
-    ax.plot(true_params[param1], true_params[param2], "r*", markersize=15, label="True values", markeredgecolor="black", markeredgewidth=1)
+    ax.plot(
+        true_params[param1],
+        true_params[param2],
+        "r*",
+        markersize=15,
+        label="True values",
+        markeredgecolor="black",
+        markeredgewidth=1,
+    )
 
     ax.set_xlabel(param1)
     ax.set_ylabel(param2)
@@ -241,9 +292,17 @@ def create_parameter_cloud_animation(
 
     # Animation function
     scat = ax.scatter([], [], s=50, alpha=0.6)
-    time_text = ax.text(0.02, 0.98, "", transform=ax.transAxes, fontsize=12, verticalalignment="top", bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.8))
+    time_text = ax.text(
+        0.02,
+        0.98,
+        "",
+        transform=ax.transAxes,
+        fontsize=12,
+        verticalalignment="top",
+        bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.8),
+    )
 
-    def animate(frame: int) -> tuple[Any, Any]:
+    def animate(frame: int):
         p1_vals = constrained_params[frame, :, p1_idx]
         p2_vals = constrained_params[frame, :, p2_idx]
 
@@ -251,7 +310,7 @@ def create_parameter_cloud_animation(
         scat.set_offsets(jnp.column_stack([p1_vals, p2_vals]))
 
         # Color by progress through time
-        colors = plt.cm.viridis(frame / K)
+        colors = plt.get_cmap("viridis")(frame / K)
         scat.set_color(colors)
 
         # Update time text
@@ -267,7 +326,11 @@ def create_parameter_cloud_animation(
     else:
         out_dir = Path(__file__).resolve().parents[2] / "docs" / "assets"
         out_dir.mkdir(parents=True, exist_ok=True)
-        ani.save(out_dir / f"hparam_cloud_animation_{param1}_{param2}.gif", writer="pillow", fps=10)
+        ani.save(
+            out_dir / f"hparam_cloud_animation_{param1}_{param2}.gif",
+            writer="pillow",
+            fps=10,
+        )
 
     plt.show()
 
@@ -295,7 +358,17 @@ def demonstrate_hparam_cloud_visualization() -> None:
     dW_independent = jax.random.normal(key_dW_indep, (K,)) * jnp.sqrt(1.0 / K)
 
     # Simulate observations
-    y_obs = simulate_observation_logS(1.0, true_params["v0"], true_params["H"], true_params["nu"], true_params["rho"], true_params["v0"], t, dW_V, dW_independent)
+    y_obs = simulate_observation_logS(
+        1.0,
+        true_params["v0"],
+        true_params["H"],
+        true_params["nu"],
+        true_params["rho"],
+        true_params["v0"],
+        t,
+        dW_V,
+        dW_independent,
+    )
 
     # Initialize ensemble with dispersed priors
     tH0, tNu0, tRho0, tV00 = sample_unconstrained_priors(key_prior, N)

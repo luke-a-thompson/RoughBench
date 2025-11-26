@@ -31,7 +31,16 @@ class RBergomiEnsemble:
     tV0: jax.Array  # log(v0),    shape (N,)
 
     def tree_flatten(self):
-        leaves = (self.S, self.V, self.X_driver, self.W_driver, self.tH, self.tNu, self.tRho, self.tV0)
+        leaves = (
+            self.S,
+            self.V,
+            self.X_driver,
+            self.W_driver,
+            self.tH,
+            self.tNu,
+            self.tRho,
+            self.tV0,
+        )
         aux = None
         return leaves, aux
 
@@ -44,7 +53,9 @@ class RBergomiEnsemble:
         return replace(self, **kwargs)
 
 
-def constrain_theta(tH: jax.Array, tNu: jax.Array, tRho: jax.Array, tV0: jax.Array) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
+def constrain_theta(
+    tH: jax.Array, tNu: jax.Array, tRho: jax.Array, tV0: jax.Array
+) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
     H = jax.nn.sigmoid(tH)
     eta = jnp.exp(tNu)
     rho = jnp.tanh(tRho)
@@ -52,7 +63,9 @@ def constrain_theta(tH: jax.Array, tNu: jax.Array, tRho: jax.Array, tV0: jax.Arr
     return H, eta, rho, v0
 
 
-def unconstrain_theta(H: jax.Array, eta: jax.Array, rho: jax.Array, v0: jax.Array) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
+def unconstrain_theta(
+    H: jax.Array, eta: jax.Array, rho: jax.Array, v0: jax.Array
+) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
     tH = jnp.log(H / (1.0 - H))
     tNu = jnp.log(eta)
     tRho = jnp.arctanh(rho)
@@ -99,12 +112,20 @@ def compute_fractional_brownian_increment(
     total_steps = volatility_increments.shape[0]
 
     next_increment = volatility_increments[current_index]
-    prev_increment = jnp.where(current_index > 0, volatility_increments[current_index - 1], jnp.asarray(0.0, volatility_increments.dtype))
+    prev_increment = jnp.where(
+        current_index > 0,
+        volatility_increments[current_index - 1],
+        jnp.asarray(0.0, volatility_increments.dtype),
+    )
     if auxiliary_noise is None:
         aux_increment = jnp.asarray(0.0, volatility_increments.dtype)
     else:
         next_aux = auxiliary_noise[current_index]
-        prev_aux = jnp.where(current_index > 0, auxiliary_noise[current_index - 1], jnp.asarray(0.0, auxiliary_noise.dtype))
+        prev_aux = jnp.where(
+            current_index > 0,
+            auxiliary_noise[current_index - 1],
+            jnp.asarray(0.0, auxiliary_noise.dtype),
+        )
         aux_increment = next_aux - prev_aux
     integral_increment = integral_coeff * (next_increment - prev_increment) + noise_coeff * aux_increment
 
@@ -113,11 +134,14 @@ def compute_fractional_brownian_increment(
 
     weight_current = jnp.where(
         historical_indices >= 2,
-        (jnp.power(historical_float, alpha + 1.0) - jnp.power(historical_float - 1.0, alpha + 1.0)) * (jnp.power(time_step, alpha) / (alpha + 1.0)),
+        (jnp.power(historical_float, alpha + 1.0) - jnp.power(historical_float - 1.0, alpha + 1.0))
+        * (jnp.power(time_step, alpha) / (alpha + 1.0)),
         0.0,
     )
     weight_next_float = historical_float + 1.0
-    weight_next = (jnp.power(weight_next_float, alpha + 1.0) - jnp.power(historical_float, alpha + 1.0)) * (jnp.power(time_step, alpha) / (alpha + 1.0))
+    weight_next = (jnp.power(weight_next_float, alpha + 1.0) - jnp.power(historical_float, alpha + 1.0)) * (
+        jnp.power(time_step, alpha) / (alpha + 1.0)
+    )
     weight_coefficients = weight_next - weight_current
 
     history_indices = current_index - historical_indices
@@ -128,7 +152,11 @@ def compute_fractional_brownian_increment(
     return jnp.sqrt(2.0 * hurst_param) * (integral_increment + historical_contribution)
 
 
-def compute_correlated_price_increment(correlation: float | jax.Array, volatility_increment: jax.Array, independent_increment: jax.Array) -> jax.Array:
+def compute_correlated_price_increment(
+    correlation: float | jax.Array,
+    volatility_increment: jax.Array,
+    independent_increment: jax.Array,
+) -> jax.Array:
     """
     Compute correlated Brownian increment for price process.
 
@@ -181,9 +209,18 @@ def create_leadlag_control(
     final_vol_driver = initial_vol_driver + vol_driver_increment
     final_price_driver = initial_price_driver + price_driver_increment
     control_values = jnp.stack(
-        [jnp.array([initial_vol_driver, initial_price_driver]), jnp.array([initial_vol_driver, final_price_driver]), jnp.array([final_vol_driver, final_price_driver])], axis=0
+        [
+            jnp.array([initial_vol_driver, initial_price_driver]),
+            jnp.array([initial_vol_driver, final_price_driver]),
+            jnp.array([final_vol_driver, final_price_driver]),
+        ],
+        axis=0,
     )
-    return dfx.LinearInterpolation(ts=time_points, ys=control_values), final_vol_driver, final_price_driver
+    return (
+        dfx.LinearInterpolation(ts=time_points, ys=control_values),
+        final_vol_driver,
+        final_price_driver,
+    )
 
 
 def evolve_single_particle(
@@ -233,8 +270,12 @@ def evolve_single_particle(
     next_vol_driver, next_price_driver : jax.Array
         Updated driver states
     """
-    vol_driver_increment = compute_fractional_brownian_increment(hurst_param, volatility_increments, time_grid, time_index)
-    price_driver_increment = compute_correlated_price_increment(correlation, volatility_increments[time_index], independent_increment)
+    vol_driver_increment = compute_fractional_brownian_increment(
+        hurst_param, volatility_increments, time_grid, time_index
+    )
+    price_driver_increment = compute_correlated_price_increment(
+        correlation, volatility_increments[time_index], independent_increment
+    )
     control_path, next_vol_driver, next_price_driver = create_leadlag_control(
         time_grid[time_index],
         time_grid[time_index + 1],
@@ -254,9 +295,21 @@ def evolve_single_particle(
 
     initial_state = jnp.array([current_price, current_volatility])
     ode_solver = dfx.Heun()
-    solver_state = ode_solver.init(sde_terms, time_grid[time_index], time_grid[time_index + 1], y0=initial_state, args=None)
+    solver_state = ode_solver.init(
+        sde_terms,
+        time_grid[time_index],
+        time_grid[time_index + 1],
+        y0=initial_state,
+        args=None,
+    )
     final_state, _, _, solver_state, _ = ode_solver.step(
-        sde_terms, time_grid[time_index], time_grid[time_index + 1], initial_state, args=None, solver_state=solver_state, made_jump=False
+        sde_terms,
+        time_grid[time_index],
+        time_grid[time_index + 1],
+        initial_state,
+        args=None,
+        solver_state=solver_state,
+        made_jump=False,
     )
     next_price, next_volatility = final_state[0], final_state[1]
 
@@ -309,7 +362,11 @@ def compute_ensemble_kalman_gains(
 
     observation_mean = jnp.mean(predicted_observations)
     innovation_deviations = predicted_observations - observation_mean
-    innovation_variance = (innovation_deviations @ innovation_deviations) / (num_particles - 1.0) + observation_noise_variance + regularization
+    innovation_variance = (
+        (innovation_deviations @ innovation_deviations) / (num_particles - 1.0)
+        + observation_noise_variance
+        + regularization
+    )
 
     param_mean = jnp.mean(unconstrained_params, axis=0)
     param_deviations = unconstrained_params - param_mean
@@ -329,7 +386,10 @@ def compute_ensemble_kalman_gains(
 def ensemble_kalman_filter_step(
     filter_state: tuple[RBergomiEnsemble, float, jax.Array, jax.Array, jax.Array, jax.Array],
     time_index: int | jax.Array,
-) -> tuple[tuple[RBergomiEnsemble, float, jax.Array, jax.Array, jax.Array, jax.Array], dict[None, None]]:
+) -> tuple[
+    tuple[RBergomiEnsemble, float, jax.Array, jax.Array, jax.Array, jax.Array],
+    dict[None, None],
+]:
     """
     Perform one step of the Ensemble Kalman Filter.
 
@@ -347,8 +407,17 @@ def ensemble_kalman_filter_step(
     info : dict
         Additional information (empty)
     """
-    ensemble, obs_noise_var, time_grid, observations, vol_increments, indep_increments = filter_state
-    hurst_params, vol_of_vol_params, correlation_params, initial_vol_params = constrain_theta(ensemble.tH, ensemble.tNu, ensemble.tRho, ensemble.tV0)
+    (
+        ensemble,
+        obs_noise_var,
+        time_grid,
+        observations,
+        vol_increments,
+        indep_increments,
+    ) = filter_state
+    hurst_params, vol_of_vol_params, correlation_params, initial_vol_params = constrain_theta(
+        ensemble.tH, ensemble.tNu, ensemble.tRho, ensemble.tV0
+    )
 
     next_prices, next_volatilities, next_vol_drivers, next_price_drivers = evolve_particle_ensemble(
         ensemble.S,
@@ -366,7 +435,14 @@ def ensemble_kalman_filter_step(
     )
     predicted_observations = jnp.log(jnp.clip(next_prices, 1e-12))
     unconstrained_param_matrix = jnp.stack([ensemble.tH, ensemble.tNu, ensemble.tRho, ensemble.tV0], axis=1)
-    param_gain, state_gain, _ = compute_ensemble_kalman_gains(unconstrained_param_matrix, next_prices, next_volatilities, predicted_observations, obs_noise_var, 1e-5)
+    param_gain, state_gain, _ = compute_ensemble_kalman_gains(
+        unconstrained_param_matrix,
+        next_prices,
+        next_volatilities,
+        predicted_observations,
+        obs_noise_var,
+        1e-5,
+    )
 
     innovations = observations[time_index + 1] - predicted_observations
 
@@ -390,7 +466,14 @@ def ensemble_kalman_filter_step(
         tRho=updated_tRho,
         tV0=updated_tV0,
     )
-    return (updated_ensemble, obs_noise_var, time_grid, observations, vol_increments, indep_increments), {}
+    return (
+        updated_ensemble,
+        obs_noise_var,
+        time_grid,
+        observations,
+        vol_increments,
+        indep_increments,
+    ), {}
 
 
 def run_ensemble_kalman_filter(
@@ -425,7 +508,14 @@ def run_ensemble_kalman_filter(
         Final ensemble after filtering
     """
     num_steps = time_grid.shape[0] - 1
-    initial_state = (initial_ensemble, observation_noise_variance, time_grid, observations, volatility_increments, independent_increments)
+    initial_state = (
+        initial_ensemble,
+        observation_noise_variance,
+        time_grid,
+        observations,
+        volatility_increments,
+        independent_increments,
+    )
     (final_state, _) = lax.scan(ensemble_kalman_filter_step, initial_state, jnp.arange(num_steps))
     final_ensemble, *_ = final_state
     return final_ensemble
@@ -447,26 +537,45 @@ def simulate_observation_logS(
     solver = dfx.Heun()
     spec = make_rough_bergomi_model_spec(v_0=v0, nu=eta, hurst=H, rho=rho)
 
-    def step(carry: tuple[jax.Array, jax.Array, jax.Array, jax.Array], k: jax.Array) -> tuple[tuple[jax.Array, jax.Array, jax.Array, jax.Array], jax.Array]:
+    def step(
+        carry: tuple[jax.Array, jax.Array, jax.Array, jax.Array], k: jax.Array
+    ) -> tuple[tuple[jax.Array, jax.Array, jax.Array, jax.Array], jax.Array]:
         S, V, X_drv, W_drv = carry
         vol_driver_increment = compute_fractional_brownian_increment(H, dW_V, t, k)
         price_driver_increment = compute_correlated_price_increment(rho, dW_V[k], dW_perp[k])
-        control, X_next, W_next = create_leadlag_control(t[k], t[k + 1], X_drv, vol_driver_increment, W_drv, price_driver_increment)
+        control, X_next, W_next = create_leadlag_control(
+            t[k], t[k + 1], X_drv, vol_driver_increment, W_drv, price_driver_increment
+        )
         terms = build_terms_with_leadlag(spec, Z_control=control)
         y0 = jnp.array([S, V], dtype=jnp.float32)
         solver_state = solver.init(terms, t[k], t[k + 1], y0=y0, args=None)
-        y1, _, _, solver_state, _ = solver.step(terms, t[k], t[k + 1], y0, args=None, solver_state=solver_state, made_jump=False)
+        y1, _, _, solver_state, _ = solver.step(
+            terms,
+            t[k],
+            t[k + 1],
+            y0,
+            args=None,
+            solver_state=solver_state,
+            made_jump=False,
+        )
         S1, V1 = y1[0], y1[1]
         y_log = jnp.log(jnp.clip(S1, 1e-12))
         return (S1, V1, X_next, W_next), y_log
 
-    carry0 = (jnp.asarray(S0, dtype=jnp.float32), jnp.asarray(V0, dtype=jnp.float32), jnp.asarray(0.0, dtype=t.dtype), jnp.asarray(0.0, dtype=t.dtype))
+    carry0 = (
+        jnp.asarray(S0, dtype=jnp.float32),
+        jnp.asarray(V0, dtype=jnp.float32),
+        jnp.asarray(0.0, dtype=t.dtype),
+        jnp.asarray(0.0, dtype=t.dtype),
+    )
     _, y_logs = lax.scan(step, carry0, jnp.arange(K))
     y0 = jnp.log(jnp.clip(jnp.asarray(S0, dtype=jnp.float32), 1e-12))
     return jnp.concatenate([y0[None], y_logs], axis=0)
 
 
-def sample_unconstrained_priors(random_key: jax.Array, num_particles: int) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
+def sample_unconstrained_priors(
+    random_key: jax.Array, num_particles: int
+) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
     """
     Sample weakly-informative priors in unconstrained parameter space.
 
@@ -527,7 +636,17 @@ def run_single_estimation_with_key(
     observartion_V0 = v0_star
 
     # Simulated observations
-    y_obs = simulate_observation_logS(observation_S0, observartion_V0, H_star, nu_star, rho_star, v0_star, t, dW_V, dW_independent)
+    y_obs = simulate_observation_logS(
+        observation_S0,
+        observartion_V0,
+        H_star,
+        nu_star,
+        rho_star,
+        v0_star,
+        t,
+        dW_V,
+        dW_independent,
+    )
 
     # Priors (deliberately noisy)
     tH0, tNu0, tRho0, tV00 = sample_unconstrained_priors(base_key, N)

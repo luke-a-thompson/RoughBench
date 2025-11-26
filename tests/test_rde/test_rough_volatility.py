@@ -27,7 +27,9 @@ def _simulate_model(
     keys = jax.random.split(key, num_paths)
 
     # Drivers
-    y0s, Xs, Ws = jax.vmap(lambda k: get_bonesini_noise_drivers(k, noise_timesteps=noise_timesteps, model_spec=model_spec, s_0=s0))(keys)
+    y0s, Xs, Ws = jax.vmap(
+        lambda k: get_bonesini_noise_drivers(k, noise_timesteps=noise_timesteps, model_spec=model_spec, s_0=s0)
+    )(keys)
 
     # Solve RDE (save on the noise grid via internal saveat)
     solve_vmap = jax.vmap(
@@ -44,6 +46,7 @@ def _simulate_model(
 
     # `sols.ys` is shaped (num_paths, noise_timesteps+1, state_dim)
     Ys = sols.ys
+    assert Ys is not None
     S_paths = Ys[..., 0]
     V_paths = Ys[..., 1]
     return S_paths, V_paths, Xs, Ws

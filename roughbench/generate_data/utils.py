@@ -1,7 +1,22 @@
 from __future__ import annotations
 
 from pathlib import Path
+from collections.abc import Iterator
+import contextlib
+
+import matplotlib
+import matplotlib.axes
+import matplotlib.figure
+import matplotlib.pyplot as plt
+
 import numpy as np
+
+try:
+    import matplotlib as _mpl  # type: ignore[import]
+    import matplotlib.pyplot as _plt  # type: ignore[import]
+except Exception:
+    _mpl = None  # type: ignore[assignment]
+    _plt = None  # type: ignore[assignment]
 
 
 def _repo_root(this_file: Path) -> Path:
@@ -34,7 +49,13 @@ def resolve_output_dirs(subdir: str, data_dir: Path | None = None) -> tuple[Path
     return data_path, docs_path
 
 
-def save_plot(filename: str, subdir: str, data_dir: Path | None = None, dpi: int = 150, verbose: bool = True) -> tuple[Path, Path]:
+def save_plot(
+    filename: str,
+    subdir: str,
+    data_dir: Path | None = None,
+    dpi: int = 150,
+    verbose: bool = True,
+) -> tuple[Path, Path]:
     """Save the current matplotlib figure to both images and docs mirrors.
 
     Returns (image_path, docs_path) to the saved files.
@@ -43,14 +64,6 @@ def save_plot(filename: str, subdir: str, data_dir: Path | None = None, dpi: int
     data_path, docs_dir = resolve_output_dirs(subdir=subdir, data_dir=data_dir)
     image_path = data_path / filename
     docs_path = docs_dir / filename
-
-    try:
-        import matplotlib.pyplot as plt  # type: ignore
-    except Exception:
-        # matplotlib not available; skip image saving but return intended paths
-        if verbose:
-            print(f"(skip) Matplotlib unavailable; intended to save plot to {image_path} and mirror to {docs_path}")
-        return image_path, docs_path
 
     plt.savefig(image_path, dpi=dpi, bbox_inches="tight")
     plt.savefig(docs_path, dpi=dpi, bbox_inches="tight")
@@ -63,7 +76,14 @@ def save_plot(filename: str, subdir: str, data_dir: Path | None = None, dpi: int
         pass
     return image_path, docs_path
 
-def save_npy(array: object, filename: str, subdir: str, data_dir: Path | None = None, verbose: bool = True) -> Path:
+
+def save_npy(
+    array: object,
+    filename: str,
+    subdir: str,
+    data_dir: Path | None = None,
+    verbose: bool = True,
+) -> Path:
     """Save a single array as .npy under <repo>/data/<subdir>/filename.
 
     This does not write anything to docs by design.
@@ -76,7 +96,14 @@ def save_npy(array: object, filename: str, subdir: str, data_dir: Path | None = 
     return target
 
 
-def save_npz_compressed(solution: object, driver: object, filename: str, subdir: str, data_dir: Path | None = None, verbose: bool = True) -> Path:
+def save_npz_compressed(
+    solution: object,
+    driver: object,
+    filename: str,
+    subdir: str,
+    data_dir: Path | None = None,
+    verbose: bool = True,
+) -> Path:
     """Save solution and driver arrays as compressed .npz under <repo>/data/<subdir>/filename.
 
     Args:
@@ -100,3 +127,98 @@ def save_npz_compressed(solution: object, driver: object, filename: str, subdir:
     return target
 
 
+def _roughbench_rcparams(font_scale: float = 1.0) -> dict[str, object]:
+    """Return a consistent matplotlib rcParams dictionary used for plotting."""
+    base = 10.0 * float(font_scale)
+    return {
+        # Figure and axes
+        "figure.facecolor": "white",
+        "axes.facecolor": "white",
+        "savefig.transparent": False,
+        # Typography
+        "font.size": base,
+        "axes.titlesize": base * 1.25,
+        "axes.labelsize": base * 1.1,
+        "legend.fontsize": base,
+        "xtick.labelsize": base,
+        "ytick.labelsize": base,
+        # Lines and grid
+        "lines.linewidth": 1.5,
+        "grid.linestyle": "--",
+        "grid.color": "#b0b0b0",
+        "grid.alpha": 0.4,
+        "axes.grid": True,
+        "axes.axisbelow": True,
+    }
+
+
+@contextlib.contextmanager
+def plotting_context(font_scale: float = 1.0) -> Iterator[object]:
+    """Context manager applying RoughBench plot style.
+
+    Usage:
+        with plotting_context():
+            fig, ax = create_figure()
+            ...
+
+    Yields the imported pyplot module.
+    """
+    rc = _roughbench_rcparams(font_scale=font_scale)
+    with matplotlib.rc_context(rc=rc):
+        yield plt
+
+
+def create_figure(
+    nrows: int = 1,
+    ncols: int = 1,
+    figsize: tuple[float, float] = (10.0, 6.0),
+    gridspec_kw: dict[str, object] | None = None,
+) -> tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]:
+    """Create a figure and axes with consistent defaults.
+
+    Returns (fig, ax).
+    """
+    fig, ax = plt.subplots(nrows, ncols, figsize=figsize, gridspec_kw=gridspec_kw)
+    return fig, ax
+
+
+def decorate_axes(
+    ax: matplotlib.axes.Axes,
+    title: str | None = None,
+    xlabel: str | None = None,
+    ylabel: str | None = None,
+    legend: bool = False,
+    legend_loc: str = "best",
+) -> None:
+    """Apply consistent decorations to a single Axes object."""
+
+    # Minor grid and clean spines
+    ax.minorticks_on()
+    ax.grid(True, which="major")
+    ax.grid(True, which="minor", alpha=0.15)
+    for side in ["top", "right"]:
+        if side in ax.spines:
+            ax.spines[side].set_visible(False)
+
+    if title is not None:
+        ax.set_title(title)
+    if xlabel is not None:
+        ax.set_xlabel(xlabel)
+    if ylabel is not None:
+        ax.set_ylabel(ylabel)
+    if legend:
+        try:
+            handles, labels = ax.get_legend_handles_labels()
+            if labels:
+                ax.legend(loc=legend_loc, frameon=False)
+        except Exception:
+            pass
+
+
+def finalize_plot(tight_layout: bool = True) -> None:
+    """Finalize the current figure (e.g., tight_layout)."""
+    if tight_layout:
+        try:
+            plt.tight_layout()
+        except Exception:
+            pass

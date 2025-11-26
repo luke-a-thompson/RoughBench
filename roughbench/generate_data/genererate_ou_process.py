@@ -3,23 +3,30 @@ import jax.numpy as jnp
 from pathlib import Path
 from roughbench.rde.ou_process import ou_process
 from quicksig.drivers.drivers import bm_driver
-from utils import save_plot, save_npz_compressed
+from utils import (
+    save_plot,
+    save_npz_compressed,
+    plotting_context,
+    create_figure,
+    decorate_axes,
+    finalize_plot,
+)
 
 
 def plot_ou_monte_carlo(
-    batch_size: int = 1000,
-    timesteps: int = 512,
-    dim: int = 1,
-    theta: float = 0.5,
-    mu: float = 0.0,
-    sigma: float = 0.3,
-    x0: float = 1.0,
+    batch_size: int,
+    timesteps: int,
+    dim: int,
+    theta: float,
+    mu: float,
+    sigma: float,
+    x0: float,
     seed: int = 42,
     output_dir: Path | None = None,
 ) -> None:
     """
     Generate and plot Ornstein-Uhlenbeck process paths using Monte Carlo simulation.
-    
+
     Args:
         batch_size: Number of paths to generate
         timesteps: Number of time steps
@@ -33,47 +40,38 @@ def plot_ou_monte_carlo(
     """
     key = jax.random.PRNGKey(seed)
     keys = jax.random.split(key, batch_size)
-    
+
     # Generate Brownian motion drivers (same as used internally by ou_process)
-    batched_bm_drivers = jax.vmap(
-        bm_driver,
-        in_axes=(0, None, None)
-    )(keys, timesteps, dim)
-    
+    batched_bm_drivers = jax.vmap(bm_driver, in_axes=(0, None, None))(keys, timesteps, dim)
+
     # Vectorize over multiple paths
-    batched_ou_paths = jax.vmap(
-        ou_process,
-        in_axes=(0, None, None, None, None, None, None)
-    )(keys, timesteps, dim, theta, mu, sigma, x0)
-    
+    batched_ou_paths = jax.vmap(ou_process, in_axes=(0, None, None, None, None, None, None))(
+        keys, timesteps, dim, theta, mu, sigma, x0
+    )
+
     ou_paths_np = jax.device_get(batched_ou_paths.path)
     bm_drivers_np = jax.device_get(batched_bm_drivers.path)
-    
-    # Plot only if matplotlib is available
-    try:
-        import matplotlib.pyplot as plt  # type: ignore
-        plt.figure(figsize=(10, 6))
+
+    # Plot with shared style
+    with plotting_context(font_scale=1.1) as plt:
+        _, ax = create_figure(figsize=(10.0, 6.0))
         for i in range(batch_size):
-            plt.plot(ou_paths_np[i, :, 0], linewidth=0.5, alpha=0.15, color="tab:orange")
-        plt.axhline(y=mu, color='red', linestyle='--', linewidth=2, label=f'Mean μ={mu}')
-        plt.title(f"Ornstein-Uhlenbeck Process (θ={theta}, μ={mu}, σ={sigma}, N={timesteps}, batch={batch_size})")
-        plt.xlabel("Time step")
-        plt.ylabel("Value")
-        plt.legend()
-        plt.tight_layout()
-    except Exception:
-        plt = None  # type: ignore
-    
+            ax.plot(ou_paths_np[i, :, 0], linewidth=0.5, alpha=0.15, color="tab:orange")
+        ax.axhline(y=mu, color="red", linestyle="--", linewidth=2, label=f"Mean μ={mu}")
+        title = f"Ornstein-Uhlenbeck (θ={theta}, μ={mu}, σ={sigma}, N={timesteps}, batch={batch_size})"
+        decorate_axes(ax, title=title, xlabel="Time step", ylabel="Value", legend=True)
+        finalize_plot(tight_layout=True)
+
     filename = "ou_process_monte_carlo.png"
-    save_plot(filename=filename, subdir="ou_processes", data_dir=output_dir, dpi=150)
-    
+    save_plot(filename=filename, subdir="ou_processes", data_dir=output_dir, dpi=200)
+
     # Save solution and driver as compressed .npz
     save_npz_compressed(
         solution=ou_paths_np,
         driver=bm_drivers_np,
         filename="ou_process_data.npz",
         subdir="ou_processes",
-        data_dir=output_dir
+        data_dir=output_dir,
     )
 
     # E[X_t] = μ + (X_0 - μ)e^(-θt) at t=1.0
@@ -91,12 +89,12 @@ def plot_ou_monte_carlo(
 if __name__ == "__main__":
     print("Generating OU process Monte Carlo simulation...")
     plot_ou_monte_carlo(
-        batch_size=1000,
-        timesteps=512,
+        batch_size=5000,
+        timesteps=8192,
+        dim=3,
         theta=0.5,
         mu=0.0,
         sigma=0.3,
         x0=1.0,
         seed=42,
     )
-
