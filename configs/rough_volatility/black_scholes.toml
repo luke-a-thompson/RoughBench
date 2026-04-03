@@ -1,0 +1,9 @@
+[general]
+num_paths = 1000
+seed = 42
+
+[parameters]
+noise_timesteps = 1028
+rde_timesteps = 8192
+
+v_0 = 0.04

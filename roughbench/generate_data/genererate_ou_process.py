@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 from pathlib import Path
 from roughbench.rde.ou_process import ou_process
-from quicksig.drivers.drivers import bm_driver
+from stochastax.drivers.drivers import bm_driver
 from utils import (
     save_plot,
     save_npz_compressed,

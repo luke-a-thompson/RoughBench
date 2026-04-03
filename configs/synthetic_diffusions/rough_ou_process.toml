@@ -1,9 +1,10 @@
 [general]
-batch_size = 1000
+num_paths = 1000
 seed = 42
 
 [parameters]
 timesteps = 512
+
 hurst = 0.7
 dim = 1
 theta = 0.5

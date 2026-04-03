@@ -2,48 +2,62 @@
 
 import jax
 import jax.numpy as jnp
-from roughbench.spde.phi34 import SimParams, precompute, simulate, structure_factor, two_point_correlation
+from roughbench.spde.phi4_3_zhu_zhu_corrected import (
+    SimParams,
+    precompute,
+    simulate,
+    structure_factor,
+    to_tcxyz,
+    two_point_correlation,
+)
 from utils import save_npy
 
 
 def main() -> None:
     """
-    Run a default Phi^4_3 simulation and save spacetime snapshots.
+    Run a default Zhu-Zhu Phi^4_3 lattice simulation and save diagnostics.
     """
-    N: int = 48
-    L: float = 0.1
-    dx: float = L / float(N)
-    dt: float = 0.01 * dx * dx
-    # Keep physical horizons fixed; recompute steps if dt changes
-    base_dt_coeff: float = 0.01  # reference coefficient for physical-time baselines
-    total_time: float = 2048 * base_dt_coeff * dx * dx
-    burnin_time: float = 64 * base_dt_coeff * dx * dx
-    sim_steps: int = int(jnp.ceil(total_time / dt))
-    burnin_steps: int = int(jnp.ceil(burnin_time / dt))
+    N: int = 32
+    sim_steps: int = 2048
+    burnin_steps: int = 32
+    dt_coeff: float = 0.01
+
+    # The corrected solver follows Zhu-Zhu's conventions:
+    # cutoff N, lattice size M = 2N + 1, spacing eps = 2 / M on [-1, 1)^3.
+    M: int = 2 * N + 1
+    eps: float = 2.0 / float(M)
+    dt: float = dt_coeff * eps * eps
 
     params: SimParams = SimParams(
         N=N,
-        L=L,
-        dx=dx,
         dt=dt,
         steps=sim_steps + burnin_steps,
-        dtype=jnp.float32,
         seed=0,
-        use_bandlimited_noise=False,
     )
 
     print("Generating Phi^4_3 spacetime data...")
     pre = precompute(params)
     phi_final, snaps = simulate(params, pre, phi0=None, snapshot_every=1, burnin=burnin_steps)
 
-    S_q = structure_factor(phi_final, L)
+    S_q = structure_factor(phi_final, params)
     C_x = two_point_correlation(phi_final)
 
+    print("cutoff N:", params.N, "lattice M:", params.M, "eps:", params.eps, "dt:", params.dt)
+    print("renorm constants:", {"C0": pre.C0, "C11": pre.C11, "C12": pre.C12, "C1": pre.C1, "Cmass": pre.Cmass})
     print("phi_final:", phi_final.shape)
     print("snaps:", None if snaps is None else snaps.shape)
     print("S_q:", S_q.shape, "C_x:", C_x.shape)
 
-    # Save spacetime rollout (snaps) as NPY
+    save_npy(jax.device_get(phi_final), "phi34_final.npy", subdir="phi34")
+    save_npy(jax.device_get(S_q), "phi34_structure_factor.npy", subdir="phi34")
+    save_npy(jax.device_get(C_x), "phi34_two_point_correlation.npy", subdir="phi34")
+    save_npy(
+        jnp.asarray([pre.C0, pre.C11, pre.C12, pre.C1, pre.Cmass], dtype=jnp.float64),
+        "phi34_renorm_constants.npy",
+        subdir="phi34",
+    )
+
+    # Save spacetime rollout (snaps) as NPY.
     if snaps is not None:
         snaps_np: object
         if params.dtype == jnp.float64:
@@ -53,8 +67,8 @@ def main() -> None:
 
         save_npy(snaps_np, "phi34_snaps.npy", subdir="phi34")
 
-        # Also save TCXYZ (add channel dim C=1) for visualization tools
-        snaps_tcxyz_np: object = jnp.expand_dims(snaps_np, axis=1)
+        # Also save TCXYZ for visualization tools.
+        snaps_tcxyz_np: object = to_tcxyz(snaps_np)
         save_npy(snaps_tcxyz_np, "phi34_snaps_tcxyz.npy", subdir="phi34")
 
     print("\nPhi^4_3 data generation complete.")
@@ -62,3 +76,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

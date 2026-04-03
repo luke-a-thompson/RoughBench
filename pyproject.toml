@@ -26,10 +26,11 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "jax>=0.6.0",
+    "jax>=0.8.1",
     "diffrax>=0.7.0",
-    "quicksig @ git+https://github.com/luke-a-thompson/QuickSig.git@master",
+    "stochastax @ git+https://github.com/luke-a-thompson/Stochastax.git@master",
     "pandas>=2.2.3",
+    "tqdm>=4.67.1",
 ]
 
 [project.urls]

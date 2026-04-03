@@ -2,7 +2,7 @@ import pytest
 import jax
 import jax.numpy as jnp
 
-from roughbench.spde.phi34 import SimParams, precompute, simulate
+from roughbench.spde.phi4_3_zhu_zhu_corrected import SimParams, precompute, simulate
 
 
 def _block_mean_and_se(series: jax.Array, n_blocks: int = 16) -> tuple[float, float]:
@@ -92,31 +92,29 @@ def _radial_power_spectrum_equal_time(phi: jax.Array) -> dict[str, jax.Array]:
 @pytest.fixture()
 def phi_snaps() -> jax.Array:
     """
-    Generate a Phi^4_3 rollout and return snapshots with shape (T, N, N, N)
-    using the full renormalization calibration.
+    Generate a Phi^4_3 rollout and return snapshots with shape (T, M, M, M)
+    for the corrected Zhu-Zhu lattice model.
     """
-    # Small grid and short trajectory for fast tests
-    N: int = 24
-    L: float = 0.1
-    dx: float = L / float(N)
-    dt: float = 0.01 * dx * dx
-    T: int = 512
-    burnin_steps: int = 128
+    # N is the paper's Fourier cutoff; the actual lattice has M = 2N + 1 sites.
+    cutoff: int = 8
+    T: int = 256
+    burnin_steps: int = 64
+    eps: float = 2.0 / float(2 * cutoff + 1)
+    dt: float = 0.01 * eps * eps
 
     params: SimParams = SimParams(
-        N=N,
-        L=L,
-        dx=dx,
+        N=cutoff,
         dt=dt,
         steps=burnin_steps + T,
-        dtype=jnp.float32,
         seed=123,
-        use_bandlimited_noise=False,
+        num_tau=48,
+        tau_max_multiplier=12.0,
     )
 
     pre = precompute(params)
     _, snaps = simulate(params, pre, phi0=None, snapshot_every=1, burnin=burnin_steps)
     assert snaps is not None
+    assert snaps.shape == (T, params.M, params.M, params.M)
     return snaps
 
 

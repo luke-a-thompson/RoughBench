@@ -396,5 +396,14 @@ if __name__ == "__main__":
 
         segment_name = csv_file.stem.replace("_vicon", "")
         npz_path = output_dir / f"{segment_name}.npz"
+
+        # Print shapes of the processed data
+        data = np.load(npz_path)
+        print(f"\n{segment_name}:")
+        print(f"  t shape: {data['t'].shape}")
+        for key in sorted(data.files):
+            if key.startswith("R_"):
+                print(f"  {key} shape: {data[key].shape}")
+
         video_path = output_dir / f"{segment_name}_all.mp4"
         make_triad_video_all_objects(npz_path, video_path, fps=sample_hz)
