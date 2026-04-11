@@ -1,5 +1,6 @@
 import jax
 import jax.numpy as jnp
+import numpy as np
 from pathlib import Path
 from roughbench.rde.rough_ou_process import rough_ou_process
 from quicksig.drivers.drivers import fractional_bm_driver
@@ -13,7 +14,7 @@ from utils import (
 )
 
 
-def plot_rough_ou_monte_carlo(
+def generate_rough_ou_data(
     batch_size: int,
     timesteps: int,
     dim: int,
@@ -23,42 +24,46 @@ def plot_rough_ou_monte_carlo(
     hurst: float,
     x0: float = 1.0,
     seed: int = 42,
-    output_dir: Path | None = None,
-) -> None:
-    """
-    Generate and plot rough Ornstein-Uhlenbeck process paths using Monte Carlo simulation.
+) -> dict[str, np.ndarray]:
+    """Generate rough Ornstein-Uhlenbeck paths and fBm drivers.
 
-    Args:
-        batch_size: Number of paths to generate
-        timesteps: Number of time steps
-        dim: Dimension of the rough OU process
-        theta: Rate of mean reversion
-        mu: Long-term mean
-        sigma: Volatility
-        hurst: Hurst parameter (controls memory)
-        x0: Initial value
-        seed: Random seed
-        output_dir: Directory to save the plot (defaults to docs/rde_bench/)
+    Returns a dict with keys:
+      - solution: rough OU paths, shape (batch_size, timesteps+1, dim)
+      - driver: fBm driver paths, shape (batch_size, timesteps+1, dim)
     """
     key = jax.random.PRNGKey(seed)
     keys = jax.random.split(key, batch_size)
 
-    # Generate fractional Brownian motion drivers (same as used internally by rough_ou_process)
-    batched_fbm_drivers = jax.vmap(fractional_bm_driver, in_axes=(0, None, None, None))(keys, timesteps, dim, hurst)
-
-    # Vectorize over multiple paths
-    batched_rough_ou_paths = jax.vmap(rough_ou_process, in_axes=(0, None, None, None, None, None, None, None))(
-        keys, timesteps, dim, theta, mu, sigma, hurst, x0
+    batched_fbm_drivers = jax.vmap(fractional_bm_driver, in_axes=(0, None, None, None))(
+        keys, timesteps, dim, hurst
     )
+    batched_rough_ou_paths = jax.vmap(
+        rough_ou_process, in_axes=(0, None, None, None, None, None, None, None)
+    )(keys, timesteps, dim, theta, mu, sigma, hurst, x0)
 
-    rough_ou_paths_np = jax.device_get(batched_rough_ou_paths.path)
-    fbm_drivers_np = jax.device_get(batched_fbm_drivers.path)
+    return {
+        "solution": jax.device_get(batched_rough_ou_paths.path),
+        "driver": jax.device_get(batched_fbm_drivers.path),
+    }
 
+
+def plot_rough_ou_monte_carlo(
+    solution: np.ndarray,
+    *,
+    batch_size: int,
+    timesteps: int,
+    theta: float,
+    mu: float,
+    sigma: float,
+    hurst: float,
+    output_dir: Path | None = None,
+) -> None:
+    """Plot rough OU process Monte Carlo paths."""
     with plotting_context(font_scale=1.1) as plt:
         _, ax = create_figure(figsize=(10.0, 6.0))
         for i in range(batch_size):
             ax.plot(
-                rough_ou_paths_np[i, :, 0],
+                solution[i, :, 0],
                 linewidth=0.5,
                 alpha=0.15,
                 color="tab:blue",
@@ -68,43 +73,66 @@ def plot_rough_ou_monte_carlo(
         decorate_axes(ax, title=title, xlabel="Time step", ylabel="Value", legend=True)
         finalize_plot(tight_layout=True)
 
-    filename = f"rough_ou_process_H{hurst:.2f}_monte_carlo.png"
-    save_plot(filename=filename, subdir="rough_ou_processes", data_dir=output_dir, dpi=200)
-
-    # Save solution and driver as compressed .npz
-    save_npz_compressed(
-        solution=rough_ou_paths_np,
-        driver=fbm_drivers_np,
-        filename=f"rough_ou_data_H{hurst:.2f}.npz",
+    save_plot(
+        filename=f"rough_ou_process_H{hurst:.2f}_monte_carlo.png",
         subdir="rough_ou_processes",
         data_dir=output_dir,
+        dpi=200,
+    )
+
+
+if __name__ == "__main__":
+    print("Generating rough OU process Monte Carlo simulation...")
+    batch_size = 5000
+    timesteps = 8192
+    dim = 3
+    theta = 0.5
+    mu = 0.0
+    sigma = 0.3
+    hurst = 0.33
+    x0 = 1.0
+    seed = 42
+
+    data = generate_rough_ou_data(
+        batch_size=batch_size,
+        timesteps=timesteps,
+        dim=dim,
+        theta=theta,
+        mu=mu,
+        sigma=sigma,
+        hurst=hurst,
+        x0=x0,
+        seed=seed,
+    )
+
+    save_npz_compressed(
+        solution=data["solution"],
+        driver=data["driver"],
+        filename=f"rough_ou_data_H{hurst:.2f}.npz",
+        subdir="rough_ou_processes",
+    )
+
+    plot_rough_ou_monte_carlo(
+        data["solution"],
+        batch_size=batch_size,
+        timesteps=timesteps,
+        theta=theta,
+        mu=mu,
+        sigma=sigma,
+        hurst=hurst,
     )
 
     # E[X_t] = μ + (X_0 - μ)e^(-θt) at t=1.0 (same as regular OU)
     T = 1.0
     expected_mean = mu + (x0 - mu) * jnp.exp(-theta * T)
-
-    # Note: For rough OU with H ≠ 0.5, the stationary variance is more complex
-    # and depends on the Hurst parameter. For H=0.5 (standard BM), it reduces to σ²/(2θ)
     expected_var_h05 = (sigma**2) / (2.0 * theta)
 
-    mean_final = float(rough_ou_paths_np[:, -1, 0].mean())
-    std_final = float(rough_ou_paths_np[:, -1, 0].std())
+    mean_final = float(data["solution"][:, -1, 0].mean())
+    std_final = float(data["solution"][:, -1, 0].std())
     print("")
-    print(f"Mean of final values: {mean_final:.4f} (expected ≈ {float(expected_mean):.4f})")
-    print(f"Std of final values: {std_final:.4f} (H=0.5 stationary σ ≈ {float(jnp.sqrt(expected_var_h05)):.4f})")
-
-
-if __name__ == "__main__":
-    print("Generating rough OU process Monte Carlo simulation...")
-    plot_rough_ou_monte_carlo(
-        batch_size=5000,
-        timesteps=8192,
-        dim=3,
-        theta=0.5,
-        mu=0.0,
-        sigma=0.3,
-        hurst=0.33,
-        x0=1.0,
-        seed=42,
+    print(
+        f"Mean of final values: {mean_final:.4f} (expected ≈ {float(expected_mean):.4f})"
+    )
+    print(
+        f"Std of final values: {std_final:.4f} (H=0.5 stationary σ ≈ {float(jnp.sqrt(expected_var_h05)):.4f})"
     )

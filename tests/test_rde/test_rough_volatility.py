@@ -28,7 +28,9 @@ def _simulate_model(
 
     # Drivers
     y0s, Xs, Ws = jax.vmap(
-        lambda k: get_bonesini_noise_drivers(k, noise_timesteps=noise_timesteps, model_spec=model_spec, s_0=s0)
+        lambda k: get_bonesini_noise_drivers(
+            k, noise_timesteps=noise_timesteps, model_spec=model_spec, s_0=s0
+        )
     )(keys)
 
     # Solve RDE (save on the noise grid via internal saveat)

@@ -268,7 +268,9 @@ def make_triad_video(
         return lines
 
     interval_ms = 1000.0 / fps if fps > 0.0 else 0.0
-    anim = FuncAnimation(fig, update, frames=R.shape[0], interval=interval_ms, blit=False)  # type: ignore[arg-type]
+    anim = FuncAnimation(
+        fig, update, frames=R.shape[0], interval=interval_ms, blit=False
+    )  # type: ignore[arg-type]
     anim.save(out_path, fps=int(fps))
     plt.close(fig)
 
@@ -306,7 +308,9 @@ def make_triad_video_all_objects(
         if R.ndim != 3 or R.shape[1:] != (3, 3):
             raise ValueError(f"R array has shape {R.shape}, expected (T, 3, 3)")
         if R.shape[0] != T:
-            raise ValueError(f"Mismatch between t shape {t.shape} and R shape {R.shape}")
+            raise ValueError(
+                f"Mismatch between t shape {t.shape} and R shape {R.shape}"
+            )
 
     import matplotlib.pyplot as plt
     from matplotlib.animation import FuncAnimation
@@ -372,7 +376,9 @@ def make_triad_video_all_objects(
                 offset = offsets[name]
                 v = Rk[:, axis_idx]
                 end = offset + v
-                line.set_data([float(offset[0]), float(end[0])], [float(offset[1]), float(end[1])])  # type: ignore[union-attr]
+                line.set_data(
+                    [float(offset[0]), float(end[0])], [float(offset[1]), float(end[1])]
+                )  # type: ignore[union-attr]
                 line.set_3d_properties([float(offset[2]), float(end[2])])  # type: ignore[union-attr]
         all_lines: list[object] = []
         for obj_lines in lines.values():
@@ -386,7 +392,9 @@ def make_triad_video_all_objects(
 
 
 if __name__ == "__main__":
-    raw_data_dir = Path(__file__).parent.parent.parent / "raw_data" / "oxford_multimotion"
+    raw_data_dir = (
+        Path(__file__).parent.parent.parent / "raw_data" / "oxford_multimotion"
+    )
     output_dir = Path(__file__).parent.parent.parent / "data" / "oxford_multimotion"
 
     sample_hz = 40.0

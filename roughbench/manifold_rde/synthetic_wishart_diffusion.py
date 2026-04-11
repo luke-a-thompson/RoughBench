@@ -45,7 +45,9 @@ def _assert_square(matrix: Array, dim: int, name: str) -> None:
         raise ValueError(f"{name} must have shape ({dim}, {dim}). Got {matrix.shape}.")
 
 
-def _check_spd(matrix: Array, name: str, eps: float, allow_semidef: bool = False) -> None:
+def _check_spd(
+    matrix: Array, name: str, eps: float, allow_semidef: bool = False
+) -> None:
     if _is_tracer(matrix):
         return
     dense = np.asarray(jax.device_get(matrix))
@@ -91,15 +93,21 @@ def make_wishart_parameters(
     return {"b": b, "H": H, "Q": Q}
 
 
-def _correlation_factor(corr_matrix: Array | None, num_paths: int, dtype: jnp.dtype) -> Array:
+def _correlation_factor(
+    corr_matrix: Array | None, num_paths: int, dtype: jnp.dtype
+) -> Array:
     if corr_matrix is None:
         return jnp.eye(num_paths, dtype=dtype)
     if corr_matrix.shape != (num_paths, num_paths):
-        raise ValueError(f"corr_matrix must have shape ({num_paths}, {num_paths}). Got {corr_matrix.shape}.")
+        raise ValueError(
+            f"corr_matrix must have shape ({num_paths}, {num_paths}). Got {corr_matrix.shape}."
+        )
     return jnp.linalg.cholesky(corr_matrix)
 
 
-def _is_identity_corr(corr_matrix: Array | None, num_paths: int, eps: float = 1e-6) -> bool:
+def _is_identity_corr(
+    corr_matrix: Array | None, num_paths: int, eps: float = 1e-6
+) -> bool:
     if corr_matrix is None:
         return True
     if _is_tracer(corr_matrix):
@@ -245,7 +253,9 @@ def simulate_wishart_diffusion(
     dim = int(X0.shape[0])
     ts = jnp.linspace(0.0, float(T), timesteps)
     m = dim * (dim + 1) // 2
-    bm = dfx.VirtualBrownianTree(t0=0.0, t1=float(T), tol=float(tol), shape=(m,), key=key)
+    bm = dfx.VirtualBrownianTree(
+        t0=0.0, t1=float(T), tol=float(tol), shape=(m,), key=key
+    )
     chol = _correlation_factor(corr_matrix, m, X0.dtype)
 
     # Precompute vech selection indices (consistent with SPDManifold.vech: row-major + tril_indices)
@@ -275,7 +285,9 @@ def simulate_wishart_diffusion(
 
         if drift_mode == "isotropic":
             # Log_X(target) points from X to target under AIRM.
-            drift = jnp.asarray(rate, dtype=X.dtype) * _affine_log(X_sym, target, eps=eps)
+            drift = jnp.asarray(rate, dtype=X.dtype) * _affine_log(
+                X_sym, target, eps=eps
+            )
         else:
             # Affine-invariant log at X pointing to target:
             mid = sym(X_inv_sqrt @ target @ X_inv_sqrt)
@@ -290,7 +302,9 @@ def simulate_wishart_diffusion(
         V = drift * dt + noise
         X_next = _affine_exp(X_sym, V, eps=eps)
 
-        qv_vec = _qv_vec_affine(X_sqrt=X_sqrt, chol=chol, noise_scale=noise_scale, dim=dim)
+        qv_vec = _qv_vec_affine(
+            X_sqrt=X_sqrt, chol=chol, noise_scale=noise_scale, dim=dim
+        )
         # Convert density to per-step increment by multiplying by dt.
         qv_vech_inc = jnp.take(jnp.take(qv_vec, lin_j, axis=0), lin_j, axis=1) * dt
         return X_next, (X_sym, qv_vech_inc)

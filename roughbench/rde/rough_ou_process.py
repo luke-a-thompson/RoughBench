@@ -74,7 +74,9 @@ def rough_ou_process(
     fbm_control = dfx.LinearInterpolation(ts=ts, ys=fbm_path.path)
 
     # Build the SDE terms
-    terms = dfx.MultiTerm(dfx.ODETerm(drift), dfx.ControlTerm(diffusion, control=fbm_control))
+    terms = dfx.MultiTerm(
+        dfx.ODETerm(drift), dfx.ControlTerm(diffusion, control=fbm_control)
+    )
 
     # Solve using Heun's method
     solution = dfx.diffeqsolve(
@@ -110,15 +112,17 @@ if __name__ == "__main__":
     keys = jax.random.split(key, batch_size)
 
     # Vectorize over multiple paths
-    batched_rough_ou_paths = jax.vmap(rough_ou_process, in_axes=(0, None, None, None, None, None, None, None))(
-        keys, timesteps, dim, theta, mu, sigma, hurst, x0
-    )
+    batched_rough_ou_paths = jax.vmap(
+        rough_ou_process, in_axes=(0, None, None, None, None, None, None, None)
+    )(keys, timesteps, dim, theta, mu, sigma, hurst, x0)
 
     rough_ou_paths_np = jax.device_get(batched_rough_ou_paths.path)
 
     plt.figure(figsize=(10, 6))
     for i in range(batch_size):
-        plt.plot(rough_ou_paths_np[i, :, 0], linewidth=0.5, alpha=0.15, color="tab:blue")
+        plt.plot(
+            rough_ou_paths_np[i, :, 0], linewidth=0.5, alpha=0.15, color="tab:blue"
+        )
     plt.axhline(y=mu, color="red", linestyle="--", linewidth=2, label=f"Mean μ={mu}")
     plt.title(
         f"Rough Ornstein-Uhlenbeck Process (θ={theta}, μ={mu}, σ={sigma}, H={hurst}, N={timesteps}, batch={batch_size})"
@@ -131,5 +135,7 @@ if __name__ == "__main__":
     plt.close()
 
     print(f"Generated {batch_size} rough OU process paths with Hurst={hurst}")
-    print(f"Mean of final values: {rough_ou_paths_np[:, -1, 0].mean():.4f} (expected ≈ {mu})")
+    print(
+        f"Mean of final values: {rough_ou_paths_np[:, -1, 0].mean():.4f} (expected ≈ {mu})"
+    )
     print(f"Std of final values: {rough_ou_paths_np[:, -1, 0].std():.4f}")

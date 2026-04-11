@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-import tomllib
 import zipfile
 
 import jax
@@ -22,6 +21,8 @@ from roughbench.manifold_rde.synthetic_wishart_diffusion import (
     simulate_wishart_diffusion,
 )
 from roughbench.generate_data.utils import (
+    load_config,
+    config_section,
     resolve_output_dirs,
     save_plot,
     plotting_context,
@@ -32,83 +33,56 @@ from roughbench.generate_data.utils import (
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate synthetic Wishart diffusion trajectories.")
+    parser = argparse.ArgumentParser(
+        description="Generate synthetic Wishart diffusion trajectories."
+    )
     parser.add_argument(
         "--config",
         type=str,
         default="configs/synthetic_diffusions/wishart_diffusion.toml",
         help="Path to TOML config file.",
     )
-    parser.add_argument("--seed", type=int, default=None, help="Optional override seed.")
-    parser.add_argument("--batch-size", type=int, default=None, help="Optional override batch size.")
-    parser.add_argument("--timesteps", type=int, default=None, help="Optional override timesteps.")
-    parser.add_argument("--T", type=float, default=None, help="Optional override horizon.")
-    parser.add_argument("--subdir", type=str, default=None, help="Optional override data subdir.")
-    parser.add_argument("--output-dir", type=str, default="", help="Optional override base data dir.")
+    parser.add_argument(
+        "--seed", type=int, default=None, help="Optional override seed."
+    )
+    parser.add_argument(
+        "--batch-size", type=int, default=None, help="Optional override batch size."
+    )
+    parser.add_argument(
+        "--timesteps", type=int, default=None, help="Optional override timesteps."
+    )
+    parser.add_argument(
+        "--T", type=float, default=None, help="Optional override horizon."
+    )
+    parser.add_argument(
+        "--subdir", type=str, default=None, help="Optional override data subdir."
+    )
+    parser.add_argument(
+        "--output-dir", type=str, default="", help="Optional override base data dir."
+    )
     parser.add_argument(
         "--chunk-size",
         type=int,
         default=None,
         help="Generate in smaller chunks to avoid OOM (e.g. 256).",
     )
-    parser.add_argument("--no-plot", action="store_true", help="Disable diagnostic plotting.")
+    parser.add_argument(
+        "--no-plot", action="store_true", help="Disable diagnostic plotting."
+    )
     return parser.parse_args()
 
 
-def _load_config(path: str) -> dict[str, object]:
-    config_path = Path(path)
-    if not config_path.exists():
-        raise FileNotFoundError(f"Config file not found: {config_path}")
-    with config_path.open("rb") as handle:
-        return tomllib.load(handle)
-
-
-def _section(config: dict[str, object], key: str) -> dict[str, object]:
-    section = config.get(key, {})
-    if not isinstance(section, dict):
-        raise ValueError(f"Config section '{key}' must be a table.")
-    return section
-
-
-def _get_int(section: dict[str, object], key: str, default: int) -> int:
-    value = section.get(key, default)
-    if isinstance(value, bool):
-        raise ValueError(f"Config value '{key}' must be an int.")
-    if not isinstance(value, int):
-        raise ValueError(f"Config value '{key}' must be an int.")
-    return int(value)
-
-
-def _get_float(section: dict[str, object], key: str, default: float) -> float:
-    value = section.get(key, default)
-    if isinstance(value, bool):
-        raise ValueError(f"Config value '{key}' must be a float.")
-    if not isinstance(value, int | float):
-        raise ValueError(f"Config value '{key}' must be a float.")
-    return float(value)
-
-
-def _get_str(section: dict[str, object], key: str, default: str) -> str:
-    value = section.get(key, default)
-    if not isinstance(value, str):
-        raise ValueError(f"Config value '{key}' must be a string.")
-    return value
-
-
-def _get_bool(section: dict[str, object], key: str, default: bool) -> bool:
-    value = section.get(key, default)
-    if not isinstance(value, bool):
-        raise ValueError(f"Config value '{key}' must be a boolean.")
-    return bool(value)
-
-
-def _maybe_identity_corr_matrix(value: object, dim: int, atol: float = 1e-6) -> jax.Array | None:
+def _maybe_identity_corr_matrix(
+    value: object, dim: int, atol: float = 1e-6
+) -> jax.Array | None:
     if value is None:
         return None
     dense = np.asarray(value, dtype=np.float32)
     num_paths = dim * (dim + 1) // 2
     if dense.shape != (num_paths, num_paths):
-        raise ValueError(f"corr_matrix must have shape ({num_paths}, {num_paths}). Got {dense.shape}.")
+        raise ValueError(
+            f"corr_matrix must have shape ({num_paths}, {num_paths}). Got {dense.shape}."
+        )
     if np.allclose(dense, np.eye(num_paths, dtype=np.float32), atol=atol, rtol=0.0):
         return None
     return jnp.asarray(dense, dtype=jnp.float32)
@@ -132,8 +106,12 @@ def _plot_trace(
     if X_paths.ndim != 3:
         raise ValueError(f"Expected X_paths shaped (B,T,C), got {X_paths.shape}.")
     if int(X_paths.shape[-1]) < 3:
-        raise ValueError(f"Expected at least 3 diagonal entries in vech, got {X_paths.shape[-1]}.")
-    diag_idx = jnp.asarray([0, 2, 5], dtype=jnp.int32) if int(X_paths.shape[-1]) == 6 else None
+        raise ValueError(
+            f"Expected at least 3 diagonal entries in vech, got {X_paths.shape[-1]}."
+        )
+    diag_idx = (
+        jnp.asarray([0, 2, 5], dtype=jnp.int32) if int(X_paths.shape[-1]) == 6 else None
+    )
     if diag_idx is None:
         # Fallback: reconstruct matrices if not 3x3 vech.
         mats = SPDManifold.unvech(X_paths)  # (B,T,d,d)
@@ -151,9 +129,20 @@ def _plot_trace(
         _, ax = create_figure(figsize=(10.0, 6.0))
         for i in idx:
             ax.plot(ts_np, traces_np[i], color="tab:blue", alpha=0.3, linewidth=0.8)
-        decorate_axes(ax, title="Wishart diffusion trace", xlabel="Time", ylabel="Trace", legend=False)
+        decorate_axes(
+            ax,
+            title="Wishart diffusion trace",
+            xlabel="Time",
+            ylabel="Trace",
+            legend=False,
+        )
         finalize_plot(tight_layout=True)
-    save_plot(filename="wishart_diffusion_trace.png", subdir=subdir, data_dir=output_dir, dpi=200)
+    save_plot(
+        filename="wishart_diffusion_trace.png",
+        subdir=subdir,
+        data_dir=output_dir,
+        dpi=200,
+    )
 
 
 def _plot_eigenvalue_trajectories(
@@ -223,7 +212,12 @@ def _plot_eigenvalue_trajectories(
         )
         ax.set_ylim(0.0, 8.0)
         finalize_plot(tight_layout=True)
-    save_plot(filename="wishart_diffusion_eigenvalues.png", subdir=subdir, data_dir=output_dir, dpi=200)
+    save_plot(
+        filename="wishart_diffusion_eigenvalues.png",
+        subdir=subdir,
+        data_dir=output_dir,
+        dpi=200,
+    )
 
 
 def generate_wishart_diffusion_batch(
@@ -297,32 +291,34 @@ def _write_final_npz_from_npy(
 
 def main() -> None:
     args = _parse_args()
-    config = _load_config(args.config)
+    config = load_config(args.config)
 
-    sim = _section(config, "simulation")
-    params = _section(config, "parameters")
-    corr = _section(config, "correlation")
-    output = _section(config, "output")
+    sim = config_section(config, "simulation")
+    params = config_section(config, "parameters")
+    corr = config_section(config, "correlation")
+    output = config_section(config, "output")
 
     Sigma = _to_array(params.get("Sigma"), "parameters.Sigma")
-    dim = _get_int(sim, "d", int(Sigma.shape[0]))
+    dim = int(sim.get("d", int(Sigma.shape[0])))
     if Sigma.shape != (dim, dim):
         raise ValueError(f"Sigma must have shape ({dim}, {dim}). Got {Sigma.shape}.")
 
-    A = _to_array(params.get("A", jnp.zeros((dim, dim), dtype=jnp.float32)), "parameters.A")
+    A = _to_array(
+        params.get("A", jnp.zeros((dim, dim), dtype=jnp.float32)), "parameters.A"
+    )
     if A.shape != (dim, dim):
         raise ValueError(f"A must have shape ({dim}, {dim}). Got {A.shape}.")
 
-    gamma = _get_float(params, "gamma", 1.0)
-    eps = _get_float(params, "eps", 1e-6)
-    timesteps = _get_int(sim, "timesteps", 1024)
-    T = _get_float(sim, "T", 1.0)
-    batch_size = _get_int(sim, "batch_size", 256)
-    tol = _get_float(sim, "tol", 1e-3)
-    chunk_size = _get_int(sim, "chunk_size", 256)
-    noise_scale = _get_float(sim, "noise_scale", 1.0)
+    gamma = float(params.get("gamma", 1.0))
+    eps = float(params.get("eps", 1e-6))
+    timesteps = int(sim.get("timesteps", 1024))
+    T = float(sim.get("T", 1.0))
+    batch_size = int(sim.get("batch_size", 256))
+    tol = float(sim.get("tol", 1e-3))
+    chunk_size = int(sim.get("chunk_size", 256))
+    noise_scale = float(sim.get("noise_scale", 1.0))
 
-    seed = _get_int(sim, "seed", 0)
+    seed = int(sim.get("seed", 0))
     if args.seed is not None:
         seed = int(args.seed)
     if args.batch_size is not None:
@@ -339,12 +335,16 @@ def main() -> None:
     corr_matrix = _maybe_identity_corr_matrix(corr.get("corr_matrix", None), dim)
 
     X0_value = params.get("X0", None)
-    X0 = jnp.eye(dim, dtype=jnp.float32) if X0_value is None else _to_array(X0_value, "parameters.X0")
+    X0 = (
+        jnp.eye(dim, dtype=jnp.float32)
+        if X0_value is None
+        else _to_array(X0_value, "parameters.X0")
+    )
     if X0.shape != (dim, dim):
         raise ValueError(f"X0 must have shape ({dim}, {dim}). Got {X0.shape}.")
 
-    subdir = _get_str(output, "subdir", "synthetic_diffusions")
-    filename = _get_str(output, "filename", "wishart_diffusion_data.npz")
+    subdir = str(output.get("subdir", "synthetic_diffusions"))
+    filename = str(output.get("filename", "wishart_diffusion_data.npz"))
     if args.subdir is not None:
         subdir = str(args.subdir)
 
@@ -418,7 +418,7 @@ def main() -> None:
     print(f"  solution: shape={solution_mm.shape}, dtype={solution_mm.dtype}")
     print(f"  quadratic_variation: shape={qv_mm.shape}, dtype={qv_mm.dtype}")
 
-    if not bool(args.no_plot) and _get_bool(output, "plot", True):
+    if not bool(args.no_plot) and bool(output.get("plot", True)):
         k = min(256, batch_size)
         _plot_trace(
             ts=jnp.asarray(ts_np),

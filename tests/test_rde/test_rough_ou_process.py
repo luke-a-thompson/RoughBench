@@ -205,24 +205,36 @@ def test_rough_ou_parameter_validation() -> None:
 
     # Test invalid theta
     with pytest.raises(ValueError, match="theta must be positive"):
-        rough_ou_process(key, timesteps, dim, theta=-0.5, mu=mu, sigma=sigma, hurst=hurst, x0=x0)
+        rough_ou_process(
+            key, timesteps, dim, theta=-0.5, mu=mu, sigma=sigma, hurst=hurst, x0=x0
+        )
 
     with pytest.raises(ValueError, match="theta must be positive"):
-        rough_ou_process(key, timesteps, dim, theta=0.0, mu=mu, sigma=sigma, hurst=hurst, x0=x0)
+        rough_ou_process(
+            key, timesteps, dim, theta=0.0, mu=mu, sigma=sigma, hurst=hurst, x0=x0
+        )
 
     # Test invalid sigma
     with pytest.raises(ValueError, match="sigma must be non-negative"):
-        rough_ou_process(key, timesteps, dim, theta=theta, mu=mu, sigma=-0.1, hurst=hurst, x0=x0)
+        rough_ou_process(
+            key, timesteps, dim, theta=theta, mu=mu, sigma=-0.1, hurst=hurst, x0=x0
+        )
 
     # Test invalid hurst (must be in (0, 1))
     with pytest.raises(ValueError, match="hurst must be in \\(0, 1\\)"):
-        rough_ou_process(key, timesteps, dim, theta=theta, mu=mu, sigma=sigma, hurst=0.0, x0=x0)
+        rough_ou_process(
+            key, timesteps, dim, theta=theta, mu=mu, sigma=sigma, hurst=0.0, x0=x0
+        )
 
     with pytest.raises(ValueError, match="hurst must be in \\(0, 1\\)"):
-        rough_ou_process(key, timesteps, dim, theta=theta, mu=mu, sigma=sigma, hurst=1.0, x0=x0)
+        rough_ou_process(
+            key, timesteps, dim, theta=theta, mu=mu, sigma=sigma, hurst=1.0, x0=x0
+        )
 
     with pytest.raises(ValueError, match="hurst must be in \\(0, 1\\)"):
-        rough_ou_process(key, timesteps, dim, theta=theta, mu=mu, sigma=sigma, hurst=1.5, x0=x0)
+        rough_ou_process(
+            key, timesteps, dim, theta=theta, mu=mu, sigma=sigma, hurst=1.5, x0=x0
+        )
 
 
 @pytest.mark.parametrize("theta", [0.5, 2.0])
@@ -283,10 +295,14 @@ def test_rough_ou_mean_reversion(theta: float, mu: float) -> None:
     # Also verify that the mean has moved towards mu from x0
     if x0 > mu:
         assert empirical_mean < x0, "Process should revert downward towards mean"
-        assert empirical_mean > mu - 3.0 * se, "Process should not overshoot mean by too much"
+        assert empirical_mean > mu - 3.0 * se, (
+            "Process should not overshoot mean by too much"
+        )
     elif x0 < mu:
         assert empirical_mean > x0, "Process should revert upward towards mean"
-        assert empirical_mean < mu + 3.0 * se, "Process should not overshoot mean by too much"
+        assert empirical_mean < mu + 3.0 * se, (
+            "Process should not overshoot mean by too much"
+        )
 
 
 def test_rough_ou_default_initial_condition() -> None:

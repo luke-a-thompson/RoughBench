@@ -22,7 +22,11 @@ def ou_samples() -> tuple[Path, dict]:
     key = jax.random.key(seed)
     keys = jax.random.split(key, num_paths)
 
-    vmap_ou = jax.vmap(lambda k: ou_process(k, timesteps=timesteps, dim=dim, theta=theta, mu=mu, sigma=sigma, x0=x0))
+    vmap_ou = jax.vmap(
+        lambda k: ou_process(
+            k, timesteps=timesteps, dim=dim, theta=theta, mu=mu, sigma=sigma, x0=x0
+        )
+    )
     paths = vmap_ou(keys)
 
     params = {
@@ -135,7 +139,11 @@ def test_ou_stationary_variance(theta: float, mu: float) -> None:
     key = jax.random.key(seed)
     keys = jax.random.split(key, num_paths)
 
-    vmap_ou = jax.vmap(lambda k: ou_process(k, timesteps=timesteps, dim=dim, theta=theta, mu=mu, sigma=sigma, x0=x0))
+    vmap_ou = jax.vmap(
+        lambda k: ou_process(
+            k, timesteps=timesteps, dim=dim, theta=theta, mu=mu, sigma=sigma, x0=x0
+        )
+    )
     paths = vmap_ou(keys)
 
     # At late time (t=1.0), the process should be close to stationary

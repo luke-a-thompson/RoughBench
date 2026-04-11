@@ -49,7 +49,9 @@ def plot_bonesini_rde(
         finalize_plot(tight_layout=True)
 
     filename = "price_comparison.png"
-    save_plot(filename=filename, subdir="rough_volatility", data_dir=output_dir, dpi=200)
+    save_plot(
+        filename=filename, subdir="rough_volatility", data_dir=output_dir, dpi=200
+    )
 
 
 def plot_bonesini_monte_carlo(
@@ -153,13 +155,10 @@ def plot_bonesini_monte_carlo(
         mean_val = jnp.mean(final_array)
         std_val = jnp.std(final_array)
 
-        # Generate normal distribution with same mean/std
         y_range = jnp.linspace(mean_val - 3 * std_val, mean_val + 3 * std_val, 100)
-        normal_pdf = jnp.exp(-0.5 * ((y_range - mean_val) / std_val) ** 2) / (std_val * jnp.sqrt(2 * jnp.pi))
+        normal_pdf = jax.scipy.stats.norm.pdf(y_range, mean_val, std_val)
 
-        # Plot normal distribution for comparison
-        if ax_marginal is not None:
-            ax_marginal.plot(
+        ax_marginal.plot(
                 normal_pdf,
                 y_range,
                 color="red",
@@ -168,12 +167,7 @@ def plot_bonesini_monte_carlo(
                 label="Normal",
             )
 
-        # Simple fat-tailedness indicator: compare tail probabilities
-        tail_threshold = 2 * std_val
-        empirical_tail_prob = jnp.mean(jnp.abs(final_array - mean_val) > tail_threshold)
-        normal_tail_prob = 2 * (1 - jax.scipy.stats.norm.cdf(tail_threshold, 0, std_val))
-
-        if ax_marginal is not None and ax_main is not None:
+        if ax_main is not None:
             price_label = "log" if use_log_price else "price"
             ax_marginal.set_xlabel("Density")
             ax_marginal.set_ylabel("Log-Price" if use_log_price else "Price")
@@ -191,7 +185,9 @@ def plot_bonesini_monte_carlo(
     finalize_plot(tight_layout=True)
 
     filename = f"{model_spec.name.lower().replace(' ', '_')}_monte_carlo.png"
-    save_plot(filename=filename, subdir="rough_volatility", data_dir=output_dir, dpi=200)
+    save_plot(
+        filename=filename, subdir="rough_volatility", data_dir=output_dir, dpi=200
+    )
 
     # Save solution and drivers as compressed .npz
     ys_paths = jnp.asarray(solution.ys)
@@ -215,8 +211,6 @@ def plot_bonesini_monte_carlo(
 
 if __name__ == "__main__":
     from roughbench.rde.rough_volatility import (
-        make_black_scholes_model_spec,
-        make_bergomi_model_spec,
         make_rough_bergomi_model_spec,
         get_bonesini_noise_drivers,
         solve_bonesini_rde_from_drivers,
@@ -228,52 +222,16 @@ if __name__ == "__main__":
 
     output_dir = None
 
-    # # BLACK-SCHOLES
-    # print("Generating Black-Scholes Monte Carlo...")
-    # black_scholes_model_spec = make_black_scholes_model_spec(v_0=0.04)
-    # keys_bs = jax.random.split(jax.random.PRNGKey(42), num_paths)
-    # y0_bs, X_bs, W_bs = jax.vmap(
-    #     lambda key: get_bonesini_noise_drivers(key, noise_timesteps, black_scholes_model_spec, s_0=1.0)
-    # )(keys_bs)
-    # solve_vmap_bs = jax.vmap(
-    #     lambda y0, X, W: solve_bonesini_rde_from_drivers(
-    #         y0, X, W, black_scholes_model_spec, noise_timesteps, rde_timesteps
-    #     )
-    # )
-    # solutions_bs = solve_vmap_bs(y0_bs, X_bs, W_bs)
-    # plot_bonesini_monte_carlo(
-    #     solutions_bs,
-    #     black_scholes_model_spec,
-    #     X_drivers=X_bs,
-    #     W_drivers=W_bs,
-    #     output_dir=output_dir,
-    # )
-
-    # # BERGOMI
-    # print("Generating Bergomi Monte Carlo...")
-    # bergomi_model_spec = make_bergomi_model_spec(v_0=0.04, rho=-0.848)
-    # keys_b = jax.random.split(jax.random.PRNGKey(42), num_paths)
-    # y0_b, X_b, W_b = jax.vmap(
-    #     lambda key: get_bonesini_noise_drivers(key, noise_timesteps, bergomi_model_spec, s_0=1.0)
-    # )(keys_b)
-    # solve_vmap_b = jax.vmap(
-    #     lambda y0, X, W: solve_bonesini_rde_from_drivers(y0, X, W, bergomi_model_spec, noise_timesteps, rde_timesteps)
-    # )
-    # solutions_b = solve_vmap_b(y0_b, X_b, W_b)
-    # plot_bonesini_monte_carlo(
-    #     solutions_b,
-    #     bergomi_model_spec,
-    #     X_drivers=X_b,
-    #     W_drivers=W_b,
-    #     output_dir=output_dir,
-    # )
-
     # ROUGH BERGOMI
     print("Generating Rough Bergomi Monte Carlo...")
-    rough_bergomi_model_spec = make_rough_bergomi_model_spec(v_0=0.04, nu=1.991, hurst=0.25, rho=-0.848)
+    rough_bergomi_model_spec = make_rough_bergomi_model_spec(
+        v_0=0.04, nu=1.991, hurst=0.25, rho=-0.848
+    )
     keys_rb = jax.random.split(jax.random.PRNGKey(42), num_paths)
     y0_rb, X_rb, W_rb = jax.vmap(
-        lambda key: get_bonesini_noise_drivers(key, noise_timesteps, rough_bergomi_model_spec, s_0=1.0)
+        lambda key: get_bonesini_noise_drivers(
+            key, noise_timesteps, rough_bergomi_model_spec, s_0=1.0
+        )
     )(keys_rb)
     solve_vmap_rb = jax.vmap(
         lambda y0, X, W: solve_bonesini_rde_from_drivers(
@@ -290,4 +248,6 @@ if __name__ == "__main__":
         output_dir=output_dir,
     )
 
-    print("\nAll rough volatility plots saved to generate_data/rough_volatility and docs/rde_bench/rough_volatility")
+    print(
+        "\nAll rough volatility plots saved to generate_data/rough_volatility and docs/rde_bench/rough_volatility"
+    )

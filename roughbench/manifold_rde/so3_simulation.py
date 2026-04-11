@@ -53,7 +53,9 @@ def convert_quat_npz_to_rotmats_by_damping(
       - `distribution_indices`: copy of input labels
     """
     if chunk_trajectories <= 0:
-        raise ValueError(f"chunk_trajectories must be positive, got: {chunk_trajectories}")
+        raise ValueError(
+            f"chunk_trajectories must be positive, got: {chunk_trajectories}"
+        )
 
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -65,7 +67,10 @@ def convert_quat_npz_to_rotmats_by_damping(
 
         if quat.ndim != 3 or quat.shape[-1] != 4:
             raise ValueError(f"Expected quat shape (N, T, 4), got: {quat.shape}")
-        if distribution_indices.ndim != 1 or distribution_indices.shape[0] != quat.shape[0]:
+        if (
+            distribution_indices.ndim != 1
+            or distribution_indices.shape[0] != quat.shape[0]
+        ):
             raise ValueError(
                 "Expected distribution_indices shape (N,) matching quat.shape[0]; "
                 f"got {distribution_indices.shape} vs N={quat.shape[0]}"
@@ -102,7 +107,9 @@ def convert_quat_npz_to_rotmats_by_damping(
                     shape=(n_label, n_steps, 3, 3),
                 )
 
-                print(f"[so3_simulation] label={label_int}  trajectories={n_label}  steps={n_steps}  tmp={tmp_path}")
+                print(
+                    f"[so3_simulation] label={label_int}  trajectories={n_label}  steps={n_steps}  tmp={tmp_path}"
+                )
 
                 write_row = 0
                 for start in range(0, n_label, chunk_trajectories):
@@ -113,13 +120,17 @@ def convert_quat_npz_to_rotmats_by_damping(
 
                     q_flat = np.asarray(q, dtype=np.float32).reshape(-1, 4)
                     r_flat = Rotation.from_quat(q_flat).as_matrix()
-                    r = r_flat.reshape(q.shape[0], n_steps, 3, 3).astype(np.float32, copy=False)
+                    r = r_flat.reshape(q.shape[0], n_steps, 3, 3).astype(
+                        np.float32, copy=False
+                    )
 
                     out[write_row : write_row + q.shape[0], :, :, :] = r
                     write_row += q.shape[0]
 
                     if (start // chunk_trajectories) % 25 == 0:
-                        print(f"[so3_simulation] label={label_int}  {write_row}/{n_label} trajectories done")
+                        print(
+                            f"[so3_simulation] label={label_int}  {write_row}/{n_label} trajectories done"
+                        )
 
                 out.flush()
 
@@ -131,7 +142,9 @@ def convert_quat_npz_to_rotmats_by_damping(
                 "distribution_indices": np.asarray(distribution_indices),
             }
             for label_int, tmp_path in tmp_paths_by_label.items():
-                savez_kwargs[f"R_sim_damped{label_int}"] = np.load(tmp_path, mmap_mode="r")
+                savez_kwargs[f"R_sim_damped{label_int}"] = np.load(
+                    tmp_path, mmap_mode="r"
+                )
 
             print(f"[so3_simulation] packing into {output_npz_path}")
             # Some type stubs for numpy define `savez(file, *args, allow_pickle=..., **kwds)`.
@@ -151,7 +164,9 @@ def convert_quat_npz_to_rotmats_by_damping(
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Convert SO(3) quaternions to rotation matrices grouped by damping.")
+    p = argparse.ArgumentParser(
+        description="Convert SO(3) quaternions to rotation matrices grouped by damping."
+    )
     p.add_argument(
         "--input-npz",
         default="/home/luke/roughbench/raw_data/sg_so3_simulation/rigid_body_FREE_ROTATION.npz",

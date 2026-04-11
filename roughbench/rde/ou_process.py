@@ -1,8 +1,7 @@
+import diffrax as dfx
 import jax
 import jax.numpy as jnp
-import diffrax as dfx
-from quicksig.drivers.drivers import bm_driver
-from quicksig.paths.paths import Path
+from stochastax.controls.drivers import bm_driver
 
 
 def ou_process(
@@ -13,7 +12,7 @@ def ou_process(
     mu: float,
     sigma: float,
     x0: float | None = None,
-) -> Path:
+):
     """
     Generates an Ornstein-Uhlenbeck process path using Brownian motion and Heun solver.
 
@@ -69,7 +68,9 @@ def ou_process(
     bm_control = dfx.LinearInterpolation(ts=ts, ys=bm_path.path)
 
     # Build the SDE terms
-    terms = dfx.MultiTerm(dfx.ODETerm(drift), dfx.ControlTerm(diffusion, control=bm_control))
+    terms = dfx.MultiTerm(
+        dfx.ODETerm(drift), dfx.ControlTerm(diffusion, control=bm_control)
+    )
 
     # Solve using Heun's method
     solution = dfx.diffeqsolve(
@@ -85,4 +86,4 @@ def ou_process(
     )
 
     assert solution.ys is not None
-    return Path(solution.ys, (0, timesteps + 1))
+    return solution.ys, (0, timesteps + 1)

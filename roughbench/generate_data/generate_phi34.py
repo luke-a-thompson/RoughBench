@@ -2,7 +2,7 @@
 
 import jax
 import jax.numpy as jnp
-from roughbench.spde.phi4_3_zhu_zhu_corrected import (
+from roughbench.spde.phi43 import (
     SimParams,
     precompute,
     simulate,
@@ -37,13 +37,33 @@ def main() -> None:
 
     print("Generating Phi^4_3 spacetime data...")
     pre = precompute(params)
-    phi_final, snaps = simulate(params, pre, phi0=None, snapshot_every=1, burnin=burnin_steps)
+    phi_final, snaps = simulate(
+        params, pre, phi0=None, snapshot_every=1, burnin=burnin_steps
+    )
 
     S_q = structure_factor(phi_final, params)
     C_x = two_point_correlation(phi_final)
 
-    print("cutoff N:", params.N, "lattice M:", params.M, "eps:", params.eps, "dt:", params.dt)
-    print("renorm constants:", {"C0": pre.C0, "C11": pre.C11, "C12": pre.C12, "C1": pre.C1, "Cmass": pre.Cmass})
+    print(
+        "cutoff N:",
+        params.N,
+        "lattice M:",
+        params.M,
+        "eps:",
+        params.eps,
+        "dt:",
+        params.dt,
+    )
+    print(
+        "renorm constants:",
+        {
+            "C0": pre.C0,
+            "C11": pre.C11,
+            "C12": pre.C12,
+            "C1": pre.C1,
+            "Cmass": pre.Cmass,
+        },
+    )
     print("phi_final:", phi_final.shape)
     print("snaps:", None if snaps is None else snaps.shape)
     print("S_q:", S_q.shape, "C_x:", C_x.shape)
@@ -59,11 +79,7 @@ def main() -> None:
 
     # Save spacetime rollout (snaps) as NPY.
     if snaps is not None:
-        snaps_np: object
-        if params.dtype == jnp.float64:
-            snaps_np = jnp.asarray(jax.device_get(snaps), dtype=jnp.float64)
-        else:
-            snaps_np = jnp.asarray(jax.device_get(snaps), dtype=jnp.float32)
+        snaps_np = jnp.asarray(jax.device_get(snaps), dtype=params.dtype)
 
         save_npy(snaps_np, "phi34_snaps.npy", subdir="phi34")
 
@@ -76,4 +92,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

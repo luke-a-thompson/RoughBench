@@ -1,14 +1,22 @@
 from dataclasses import dataclass
+from enum import StrEnum
+from typing import Callable
+
+import diffrax as dfx
 import jax
 import jax.numpy as jnp
 from jax import Array
-from quicksig.drivers.drivers import (
+from stochastax.controls.drivers import (
     bm_driver,
     correlate_bm_driver_against_reference,
     riemann_liouville_driver,
 )
-from typing import Callable
-import diffrax as dfx
+
+
+class ModelFamily(StrEnum):
+    BLACK_SCHOLES = "Black-Scholes"
+    BERGOMI = "Bergomi"
+    ROUGH_BERGOMI = "Rough Bergomi"
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,8 +25,7 @@ class BonesiniModelSpec:
     Specification for the Bonesini RDE.
 
     Args:
-        name: Name of the model.
-        state: State of the model.
+        name: Model family.
         hurst: Hurst parameter.
         v_0: Forward volatility.
         nu: Vol-of-vol parameter.
@@ -33,7 +40,7 @@ class BonesiniModelSpec:
         ValueError: If the parameters are invalid.
     """
 
-    name: str
+    name: ModelFamily
 
     hurst: float
     v_0: float
@@ -48,17 +55,9 @@ class BonesiniModelSpec:
     h: Callable[[Array, Array, float], Array] | None  # dt drift in dV
 
     def __post_init__(self):
-        # When constructed inside JAX transformations (vmap/jit), parameters may be
-        # JAX tracers. Avoid Python boolean checks in that case.
-        def _is_jax_array(x):
-            return isinstance(x, jax.Array)
-
-        if (
-            _is_jax_array(self.hurst)
-            or _is_jax_array(self.v_0)
-            or (self.nu is not None and _is_jax_array(self.nu))
-            or (self.rho is not None and _is_jax_array(self.rho))
-        ):
+        # Skip validation when inside JAX transformations (parameters are tracers).
+        params = [self.hurst, self.v_0, self.nu, self.rho]
+        if any(isinstance(x, jax.Array) for x in params if x is not None):
             return
 
         if not (0.0 < float(self.hurst) < 1.0):
@@ -71,7 +70,9 @@ class BonesiniModelSpec:
             raise ValueError(f"rho must be between -1 and 1. Got {self.rho}")
 
 
-def make_lead_lag_control(ts: jax.Array, X: jax.Array, W: jax.Array) -> dfx.LinearInterpolation:
+def make_lead_lag_control(
+    ts: jax.Array, X: jax.Array, W: jax.Array
+) -> dfx.LinearInterpolation:
     """
     Lead-lag construction for the 2D control Z = (X^lag, W).
     Inputs:
@@ -89,7 +90,9 @@ def make_lead_lag_control(ts: jax.Array, X: jax.Array, W: jax.Array) -> dfx.Line
     # Staggered times: τ_0=t_0; τ_{2k}=t_k, τ_{2k+1}=t_k+Δ/2, τ_{2N}=t_N
     τ_even = ts[:-1]
     τ_mid = ts[:-1] + 0.5 * Δ
-    τ = jnp.concatenate([jnp.stack([τ_even, τ_mid], axis=1).reshape(-1), ts[-1:]], axis=0)  # (2N+1,)
+    τ = jnp.concatenate(
+        [jnp.stack([τ_even, τ_mid], axis=1).reshape(-1), ts[-1:]], axis=0
+    )  # (2N+1,)
 
     # Values:
     # at τ_{2k}   : (X_{t_k},   W_{t_k})
@@ -98,12 +101,16 @@ def make_lead_lag_control(ts: jax.Array, X: jax.Array, W: jax.Array) -> dfx.Line
     Z_even = jnp.stack([X[:-1], W[:-1]], axis=1)  # (N, 2)
     Z_mid = jnp.stack([X[:-1], W[1:]], axis=1)  # (N, 2)
     Z_last = jnp.stack([X[-1], W[-1]])[None, :]  # (1, 2)
-    Z = jnp.concatenate([jnp.reshape(jnp.stack([Z_even, Z_mid], axis=1), (2 * N, 2)), Z_last], axis=0)  # (2N+1, 2)
+    Z = jnp.concatenate(
+        [jnp.reshape(jnp.stack([Z_even, Z_mid], axis=1), (2 * N, 2)), Z_last], axis=0
+    )  # (2N+1, 2)
 
     return dfx.LinearInterpolation(ts=τ, ys=Z)
 
 
-def build_terms_with_leadlag(model_spec: BonesiniModelSpec, Z_control: dfx.LinearInterpolation):
+def build_terms_with_leadlag(
+    model_spec: BonesiniModelSpec, Z_control: dfx.LinearInterpolation
+):
     def f0(t: float, y: jax.Array, args: tuple[float, float, float]) -> jax.Array:
         """
         ODE terms integrated against time (dt).
@@ -141,43 +148,50 @@ def build_terms_with_leadlag(model_spec: BonesiniModelSpec, Z_control: dfx.Linea
     return dfx.MultiTerm(dfx.ODETerm(f0), dfx.ControlTerm(vf_Z, control=Z_control))
 
 
+def _build_noise_drivers(
+    key: jax.Array,
+    noise_timesteps: int,
+    model_spec: BonesiniModelSpec,
+) -> tuple[jax.Array, jax.Array]:
+    """Build noise drivers (X, W) for the given model family."""
+    key_W, key_B, key_V = jax.random.split(key, 3)
+
+    W_path = bm_driver(key_W, noise_timesteps, 1)
+    W = jnp.squeeze(W_path.path)
+
+    if model_spec.name == ModelFamily.BLACK_SCHOLES:
+        X = jnp.zeros_like(W)
+    elif model_spec.name == ModelFamily.BERGOMI:
+        B_path = bm_driver(key_B, noise_timesteps, 1)
+        X = jnp.squeeze(
+            correlate_bm_driver_against_reference(W_path, B_path, model_spec.rho).path
+        )
+    elif model_spec.name == ModelFamily.ROUGH_BERGOMI:
+        B_path = bm_driver(key_B, noise_timesteps, 1)
+        W1_corr = correlate_bm_driver_against_reference(W_path, B_path, model_spec.rho)
+        X = jnp.squeeze(
+            riemann_liouville_driver(
+                key_V, noise_timesteps, model_spec.hurst, W1_corr
+            ).path
+        )
+    else:
+        raise ValueError(f"Unknown model family: {model_spec.name}")
+
+    return X, W
+
+
 def get_bonesini_rde_params(
     key: jax.Array,
     noise_timesteps: int,
     model_spec: BonesiniModelSpec,
     s_0: float,
 ) -> tuple[jax.Array, dfx.MultiTerm]:
-    """
-    Generates a Bonesini RDE path.
-    """
-    key_W, key_B, key_V = jax.random.split(key, 3)
+    """Generates a Bonesini RDE path."""
+    X, W = _build_noise_drivers(key, noise_timesteps, model_spec)
     ts_noise = jnp.linspace(0.0, 1.0, noise_timesteps + 1)
-
-    # Brownian for price
-    W_path = bm_driver(key_W, noise_timesteps, 1)
-    W = jnp.squeeze(W_path.path)
-
-    # Second driver (X): choose per model
-    if model_spec.name.startswith("Black-Scholes"):
-        X = jnp.zeros_like(W)  # dummy, not a stoch vol
-    elif model_spec.name.startswith("Bergomi"):
-        # X = W^V, correlated with W (price) by rho
-        B_path = bm_driver(key_B, noise_timesteps, 1)
-        Wv_corr = correlate_bm_driver_against_reference(W_path, B_path, model_spec.rho)
-        X = jnp.squeeze(Wv_corr.path)
-    elif model_spec.name.startswith("Rough Bergomi"):
-        # X = RL integral of a Brownian correlated with W
-        B_path = bm_driver(key_B, noise_timesteps, 1)
-        W1_corr = correlate_bm_driver_against_reference(W_path, B_path, model_spec.rho)
-        X = jnp.squeeze(riemann_liouville_driver(key_V, noise_timesteps, model_spec.hurst, W1_corr).path)
-    else:
-        raise ValueError("Unknown model for control construction.")
-
     Z = make_lead_lag_control(ts_noise, X=X, W=W)
     terms = build_terms_with_leadlag(model_spec, Z_control=Z)
-    y_0 = jnp.array([s_0, 0.0])
-
-    return y_0, terms
+    return jnp.array([s_0, 0.0]), terms
 
 
 def get_bonesini_noise_drivers(
@@ -186,59 +200,12 @@ def get_bonesini_noise_drivers(
     model_spec: BonesiniModelSpec,
     s_0: float,
 ) -> tuple[jax.Array, jax.Array, jax.Array]:
-    """
-    Generate initial condition and noise drivers (X, W) for the Bonesini RDE.
-    Returns (y0, X, W) as arrays so we can vmap over them easily.
-    """
-    key_W, key_B, key_V = jax.random.split(key, 3)
-
-    # Brownian for price
-    W_path = bm_driver(key_W, noise_timesteps, 1)
-    W = jnp.squeeze(W_path.path)
-
-    # Second driver (X): choose per model
-    if model_spec.name.startswith("Black-Scholes"):
-        X = jnp.zeros_like(W)
-    elif model_spec.name.startswith("Bergomi"):
-        B_path = bm_driver(key_B, noise_timesteps, 1)
-        Wv_corr = correlate_bm_driver_against_reference(W_path, B_path, model_spec.rho)
-        X = jnp.squeeze(Wv_corr.path)
-    elif model_spec.name.startswith("Rough Bergomi"):
-        B_path = bm_driver(key_B, noise_timesteps, 1)
-        W1_corr = correlate_bm_driver_against_reference(W_path, B_path, model_spec.rho)
-        X = jnp.squeeze(riemann_liouville_driver(key_V, noise_timesteps, model_spec.hurst, W1_corr).path)
-    else:
-        raise ValueError("Unknown model for control construction.")
-
-    y_0 = jnp.array([s_0, 0.0])
-    return y_0, X, W
+    """Generate initial condition and noise drivers (X, W) for vmapping over paths."""
+    X, W = _build_noise_drivers(key, noise_timesteps, model_spec)
+    return jnp.array([s_0, 0.0]), X, W
 
 
-def solve_bonesini_rde_wong_zakai(
-    y_0: jax.Array, terms: dfx.MultiTerm, noise_timesteps: int, rde_timesteps: int
-) -> dfx.Solution:
-    if noise_timesteps > rde_timesteps:
-        raise ValueError("Noise timesteps must be less than or equal to RDE timesteps.")
-
-    ts_noise = jnp.linspace(0.0, 1.0, noise_timesteps + 1)
-    ts_rde = jnp.linspace(0.0, 1.0, rde_timesteps + 1)
-
-    solution = dfx.diffeqsolve(
-        terms=terms,
-        solver=dfx.Heun(),
-        t0=0.0,
-        t1=1.0,
-        dt0=ts_rde[1] - ts_rde[0],
-        y0=y_0,
-        saveat=dfx.SaveAt(ts=ts_noise),
-        stepsize_controller=dfx.ConstantStepSize(),
-        max_steps=None,
-    )
-
-    return solution
-
-
-def solve_bonesini_rde_from_drivers(
+def solve_wong_zakai(
     y_0: jax.Array,
     X: jax.Array,
     W: jax.Array,
@@ -246,28 +213,35 @@ def solve_bonesini_rde_from_drivers(
     noise_timesteps: int,
     rde_timesteps: int,
 ) -> dfx.Solution:
+    if noise_timesteps > rde_timesteps:
+        raise ValueError("Noise timesteps must be less than or equal to RDE timesteps.")
+
     ts_noise = jnp.linspace(0.0, 1.0, noise_timesteps + 1)
     Z = make_lead_lag_control(ts_noise, X=X, W=W)
     terms = build_terms_with_leadlag(model_spec, Z_control=Z)
-    solution = solve_bonesini_rde_wong_zakai(y_0, terms, noise_timesteps, rde_timesteps)
-    return solution
+
+    return dfx.diffeqsolve(
+        terms=terms,
+        solver=dfx.Heun(),
+        t0=0.0,
+        t1=1.0,
+        dt0=1.0 / rde_timesteps,
+        y0=y_0,
+        saveat=dfx.SaveAt(ts=ts_noise),
+        stepsize_controller=dfx.ConstantStepSize(),
+        max_steps=None,
+    )
 
 
 def make_black_scholes_model_spec(v_0: float) -> BonesiniModelSpec:
-    """
-    Makes a Black-Scholes model specification.
-    """
-    sigma = lambda s, v, t: s * jnp.sqrt(v_0)
-    g = lambda s, v, t: -0.5 * s * v_0
-
     return BonesiniModelSpec(
-        name="Black-Scholes",
+        name=ModelFamily.BLACK_SCHOLES,
         hurst=0.5,
         v_0=v_0,
         nu=0.0,
         rho=0.0,
-        sigma=sigma,
-        g=g,
+        sigma=lambda s, v, t: s * jnp.sqrt(v_0),
+        g=lambda s, v, t: -0.5 * s * v_0,
         tau=None,
         varsigma=None,
         h=None,
@@ -275,48 +249,39 @@ def make_black_scholes_model_spec(v_0: float) -> BonesiniModelSpec:
 
 
 def make_bergomi_model_spec(v_0: float, rho: float) -> BonesiniModelSpec:
-    """
-    Makes a Bergomi model specification.
-    """
     rho_bar = jnp.sqrt(1.0 - rho**2)
-
-    sigma = lambda s, v, t: s * jnp.exp(v)
-    g = lambda s, v, t: 0.0
-    tau = lambda s, v, t: rho_bar * v
-    varsigma = lambda s, v, t: rho * v
-    h = lambda s, v, t: 0.0
-
     return BonesiniModelSpec(
-        name="Bergomi",
+        name=ModelFamily.BERGOMI,
         hurst=0.5,
         v_0=v_0,
         nu=None,
         rho=rho,
-        sigma=sigma,
-        g=g,
-        tau=tau,
-        varsigma=varsigma,
-        h=h,
+        sigma=lambda s, v, t: s * jnp.exp(v),
+        g=None,
+        tau=lambda s, v, t: rho_bar * v,
+        varsigma=lambda s, v, t: rho * v,
+        h=None,
     )
 
 
-def make_rough_bergomi_model_spec(v_0: float, nu: float, hurst: float, rho: float) -> BonesiniModelSpec:
+def make_rough_bergomi_model_spec(
+    v_0: float, nu: float, hurst: float, rho: float
+) -> BonesiniModelSpec:
     # Hybrid RL normalisation: Var[V_t] = t^{2H}  ⇒  C = 2 nu^2
-
-    # PRICE coefficients (not log-price)
-    sigma = lambda s, v, t: s * jnp.sqrt(v_0) * jnp.exp(0.5 * nu * v - 0.25 * (nu**2) * (t ** (2.0 * hurst)))
-    g = lambda s, v, t: 0.0
-    tau = lambda s, v, t: 1.0  # dV = dX
-
     return BonesiniModelSpec(
-        name="Rough Bergomi",
+        name=ModelFamily.ROUGH_BERGOMI,
         hurst=hurst,
         v_0=v_0,
         nu=nu,
         rho=rho,
-        sigma=sigma,
-        g=g,
-        tau=tau,
+        # PRICE coefficients (not log-price)
+        sigma=lambda s, v, t: (
+            s
+            * jnp.sqrt(v_0)
+            * jnp.exp(0.5 * nu * v - 0.25 * (nu**2) * (t ** (2.0 * hurst)))
+        ),
+        g=None,
+        tau=lambda s, v, t: 1.0,  # dV = dX
         varsigma=None,
         h=None,
     )

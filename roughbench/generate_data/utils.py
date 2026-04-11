@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from collections.abc import Iterator
 import contextlib
+import tomllib
 
 import matplotlib
 import matplotlib.axes
@@ -10,13 +11,6 @@ import matplotlib.figure
 import matplotlib.pyplot as plt
 
 import numpy as np
-
-try:
-    import matplotlib as _mpl  # type: ignore[import]
-    import matplotlib.pyplot as _plt  # type: ignore[import]
-except Exception:
-    _mpl = None  # type: ignore[assignment]
-    _plt = None  # type: ignore[assignment]
 
 
 def _repo_root(this_file: Path) -> Path:
@@ -27,6 +21,21 @@ def _repo_root(this_file: Path) -> Path:
     """
     # .../roughbench/roughbench/generate_data/utils.py -> repo root at parents[2]
     return this_file.resolve().parents[2]
+
+
+def load_config(path: str) -> dict[str, object]:
+    config_path = Path(path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+    with config_path.open("rb") as handle:
+        return tomllib.load(handle)
+
+
+def config_section(config: dict[str, object], key: str) -> dict[str, object]:
+    section = config.get(key, {})
+    if not isinstance(section, dict):
+        raise ValueError(f"Config section '{key}' must be a table.")
+    return section
 
 
 def resolve_output_dirs(subdir: str, data_dir: Path | None = None) -> tuple[Path, Path]:
@@ -70,10 +79,7 @@ def save_plot(
     if verbose:
         print("")
         print(f"Saved plot to {image_path} and mirrored to {docs_path}")
-    try:
-        plt.close()
-    except Exception:
-        pass
+    plt.close()
     return image_path, docs_path
 
 
@@ -121,9 +127,40 @@ def save_npz_compressed(
     """
     data_path, _ = resolve_output_dirs(subdir=subdir, data_dir=data_dir)
     target = data_path / filename
-    np.savez_compressed(target, solution=np.asarray(solution), driver=np.asarray(driver))
+    np.savez_compressed(
+        target, solution=np.asarray(solution), driver=np.asarray(driver)
+    )
     if verbose:
         print(f"Saved compressed data (solution + driver) to {target}")
+    return target
+
+
+def save_npz(
+    filename: str,
+    subdir: str,
+    data_dir: Path | None = None,
+    verbose: bool = True,
+    **arrays: object,
+) -> Path:
+    """Save named arrays as compressed .npz under <repo>/data/<subdir>/filename.
+
+    Args:
+        filename: Output filename (should end in .npz)
+        subdir: Subdirectory under data/
+        data_dir: Optional override for data directory
+        verbose: Print save confirmation
+        **arrays: Named arrays to save
+
+    Returns:
+        Path to saved file
+
+    This does not write anything to docs by design.
+    """
+    data_path, _ = resolve_output_dirs(subdir=subdir, data_dir=data_dir)
+    target = data_path / filename
+    np.savez_compressed(target, **{k: np.asarray(v) for k, v in arrays.items()})
+    if verbose:
+        print(f"Saved compressed data to {target}")
     return target
 
 
@@ -197,8 +234,7 @@ def decorate_axes(
     ax.grid(True, which="major")
     ax.grid(True, which="minor", alpha=0.15)
     for side in ["top", "right"]:
-        if side in ax.spines:
-            ax.spines[side].set_visible(False)
+        ax.spines[side].set_visible(False)
 
     if title is not None:
         ax.set_title(title)
@@ -207,18 +243,11 @@ def decorate_axes(
     if ylabel is not None:
         ax.set_ylabel(ylabel)
     if legend:
-        try:
-            handles, labels = ax.get_legend_handles_labels()
-            if labels:
-                ax.legend(loc=legend_loc, frameon=False)
-        except Exception:
-            pass
+        handles, labels = ax.get_legend_handles_labels()
+        if labels:
+            ax.legend(loc=legend_loc, frameon=False)
 
 
 def finalize_plot(tight_layout: bool = True) -> None:
-    """Finalize the current figure (e.g., tight_layout)."""
     if tight_layout:
-        try:
-            plt.tight_layout()
-        except Exception:
-            pass
+        plt.tight_layout()

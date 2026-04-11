@@ -6,31 +6,56 @@ import numpy as np
 from roughbench.rde.simple_rbergomi import rBergomi
 from utils import (
     save_plot,
+    save_npz,
     plotting_context,
     create_figure,
     decorate_axes,
     finalize_plot,
-    resolve_output_dirs,
 )
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate simple rBergomi Monte Carlo data and save as .npz.")
+    parser = argparse.ArgumentParser(
+        description="Generate simple rBergomi Monte Carlo data and save as .npz."
+    )
     parser.add_argument("--n", type=int, default=512, help="Steps per year.")
     parser.add_argument("--T", type=float, default=1.0, help="Maturity / time horizon.")
-    parser.add_argument("--N", type=int, default=32768, help="Number of Monte Carlo paths.")
-
-    parser.add_argument("--a", type=float, default=-0.4, help="Alpha parameter (H = a + 0.5). Requires 2*a+1>0.")
     parser.add_argument(
-        "--rho", type=float, default=-0.848, help="Correlation between variance and price Brownian motions."
+        "--N", type=int, default=32768, help="Number of Monte Carlo paths."
     )
-    parser.add_argument("--eta", type=float, default=1.991, help="Vol-of-vol parameter eta.")
-    parser.add_argument("--xi", type=float, default=0.04, help="Forward variance level xi (e.g. v0).")
+
+    parser.add_argument(
+        "--a",
+        type=float,
+        default=-0.4,
+        help="Alpha parameter (H = a + 0.5). Requires 2*a+1>0.",
+    )
+    parser.add_argument(
+        "--rho",
+        type=float,
+        default=-0.848,
+        help="Correlation between variance and price Brownian motions.",
+    )
+    parser.add_argument(
+        "--eta", type=float, default=1.991, help="Vol-of-vol parameter eta."
+    )
+    parser.add_argument(
+        "--xi", type=float, default=0.04, help="Forward variance level xi (e.g. v0)."
+    )
     parser.add_argument("--S0", type=float, default=1.0, help="Initial price.")
 
-    parser.add_argument("--seed", type=int, default=42, help="Random seed for NumPy RNG.")
-    parser.add_argument("--subdir", type=str, default="rough_volatility", help="Subdir under data/ to save into.")
-    parser.add_argument("--no-plot", action="store_true", help="Disable saving diagnostic plots.")
+    parser.add_argument(
+        "--seed", type=int, default=42, help="Random seed for NumPy RNG."
+    )
+    parser.add_argument(
+        "--subdir",
+        type=str,
+        default="rough_volatility",
+        help="Subdir under data/ to save into.",
+    )
+    parser.add_argument(
+        "--no-plot", action="store_true", help="Disable saving diagnostic plots."
+    )
     parser.add_argument(
         "--output-dir",
         type=str,
@@ -87,28 +112,6 @@ def generate_simple_rbergomi_data(
     }
 
 
-def _save_npz_payload(
-    *,
-    payload: dict[str, np.ndarray],
-    filename: str,
-    subdir: str,
-    data_dir: Path | None,
-) -> Path:
-    # Save exactly what downstream expects: dt, price, log_price, variance, and price Brownian driver.
-    data_path, _ = resolve_output_dirs(subdir=subdir, data_dir=data_dir)
-    target = data_path / filename
-    np.savez_compressed(
-        target,
-        dt=payload["dt"],
-        price=payload["price"],
-        log_price=payload["log_price"],
-        variance=payload["variance"],
-        driver=payload["driver"],
-    )
-    print(f"Saved compressed data to {target}")
-    return target
-
-
 def _save_plots(
     *,
     payload: dict[str, np.ndarray],
@@ -132,10 +135,19 @@ def _save_plots(
         for i in idx:
             ax.plot(ts, log_price[i], color="gray", alpha=0.5, linewidth=0.8)
         decorate_axes(
-            ax, title="Simple rBergomi Monte Carlo (log-price)", xlabel="Time", ylabel="Log-Price", legend=False
+            ax,
+            title="Simple rBergomi Monte Carlo (log-price)",
+            xlabel="Time",
+            ylabel="Log-Price",
+            legend=False,
         )
         finalize_plot(tight_layout=True)
-    save_plot(filename="simple_rbergomi_log_price_monte_carlo.png", subdir=subdir, data_dir=output_dir, dpi=200)
+    save_plot(
+        filename="simple_rbergomi_log_price_monte_carlo.png",
+        subdir=subdir,
+        data_dir=output_dir,
+        dpi=200,
+    )
 
     with plotting_context(font_scale=1.1):
         _, ax = create_figure(figsize=(10.0, 6.0))
@@ -149,7 +161,12 @@ def _save_plots(
             legend=False,
         )
         finalize_plot(tight_layout=True)
-    save_plot(filename="simple_rbergomi_variance_monte_carlo.png", subdir=subdir, data_dir=output_dir, dpi=200)
+    save_plot(
+        filename="simple_rbergomi_variance_monte_carlo.png",
+        subdir=subdir,
+        data_dir=output_dir,
+        dpi=200,
+    )
 
 
 if __name__ == "__main__":
@@ -158,31 +175,39 @@ if __name__ == "__main__":
     filename = "simple_rbergomi_data.npz"
 
     payload = generate_simple_rbergomi_data(
-        n=int(args.n),
-        T=float(args.T),
-        N=int(args.N),
-        a=float(args.a),
-        rho=float(args.rho),
-        eta=float(args.eta),
-        xi=float(args.xi),
-        S0=float(args.S0),
-        seed=int(args.seed),
+        n=args.n,
+        T=args.T,
+        N=args.N,
+        a=args.a,
+        rho=args.rho,
+        eta=args.eta,
+        xi=args.xi,
+        S0=args.S0,
+        seed=args.seed,
     )
 
-    _save_npz_payload(
-        payload=payload,
-        filename=filename,
-        subdir=str(args.subdir),
+    save_npz(
+        filename,
+        subdir=args.subdir,
         data_dir=output_dir,
+        dt=payload["dt"],
+        price=payload["price"],
+        log_price=payload["log_price"],
+        variance=payload["variance"],
+        driver=payload["driver"],
     )
 
     print("")
     print("Generated arrays:")
     print(f"  dt: shape={payload['dt'].shape}, dtype={payload['dt'].dtype}")
     print(f"  price: shape={payload['price'].shape}, dtype={payload['price'].dtype}")
-    print(f"  log_price: shape={payload['log_price'].shape}, dtype={payload['log_price'].dtype}")
-    print(f"  variance: shape={payload['variance'].shape}, dtype={payload['variance'].dtype}")
+    print(
+        f"  log_price: shape={payload['log_price'].shape}, dtype={payload['log_price'].dtype}"
+    )
+    print(
+        f"  variance: shape={payload['variance'].shape}, dtype={payload['variance'].dtype}"
+    )
     print(f"  driver: shape={payload['driver'].shape}, dtype={payload['driver'].dtype}")
 
     if not bool(args.no_plot):
-        _save_plots(payload=payload, subdir=str(args.subdir), output_dir=output_dir)
+        _save_plots(payload=payload, subdir=args.subdir, output_dir=output_dir)

@@ -106,7 +106,11 @@ def compute_fractional_brownian_increment(
 
     integral_coeff = jnp.power(time_step, alpha) / (alpha + 1.0)
     integral_variance = jnp.power(time_step, 2.0 * alpha + 1.0) / (2.0 * alpha + 1.0)
-    noise_coeff = jnp.sqrt(jnp.maximum(integral_variance - (integral_coeff * integral_coeff) * time_step, 0.0))
+    noise_coeff = jnp.sqrt(
+        jnp.maximum(
+            integral_variance - (integral_coeff * integral_coeff) * time_step, 0.0
+        )
+    )
 
     current_index = jnp.asarray(time_index, dtype=jnp.int32)
     total_steps = volatility_increments.shape[0]
@@ -127,27 +131,37 @@ def compute_fractional_brownian_increment(
             jnp.asarray(0.0, auxiliary_noise.dtype),
         )
         aux_increment = next_aux - prev_aux
-    integral_increment = integral_coeff * (next_increment - prev_increment) + noise_coeff * aux_increment
+    integral_increment = (
+        integral_coeff * (next_increment - prev_increment) + noise_coeff * aux_increment
+    )
 
     historical_indices = jnp.arange(1, total_steps + 1, dtype=jnp.int32)
     historical_float = historical_indices.astype(time_grid.dtype)
 
     weight_current = jnp.where(
         historical_indices >= 2,
-        (jnp.power(historical_float, alpha + 1.0) - jnp.power(historical_float - 1.0, alpha + 1.0))
+        (
+            jnp.power(historical_float, alpha + 1.0)
+            - jnp.power(historical_float - 1.0, alpha + 1.0)
+        )
         * (jnp.power(time_step, alpha) / (alpha + 1.0)),
         0.0,
     )
     weight_next_float = historical_float + 1.0
-    weight_next = (jnp.power(weight_next_float, alpha + 1.0) - jnp.power(historical_float, alpha + 1.0)) * (
-        jnp.power(time_step, alpha) / (alpha + 1.0)
-    )
+    weight_next = (
+        jnp.power(weight_next_float, alpha + 1.0)
+        - jnp.power(historical_float, alpha + 1.0)
+    ) * (jnp.power(time_step, alpha) / (alpha + 1.0))
     weight_coefficients = weight_next - weight_current
 
     history_indices = current_index - historical_indices
-    valid_mask = (historical_indices <= current_index).astype(volatility_increments.dtype)
+    valid_mask = (historical_indices <= current_index).astype(
+        volatility_increments.dtype
+    )
     safe_indices = jnp.clip(history_indices, 0, total_steps - 1)
-    historical_contribution = jnp.sum(weight_coefficients * volatility_increments[safe_indices] * valid_mask)
+    historical_contribution = jnp.sum(
+        weight_coefficients * volatility_increments[safe_indices] * valid_mask
+    )
 
     return jnp.sqrt(2.0 * hurst_param) * (integral_increment + historical_contribution)
 
@@ -174,7 +188,10 @@ def compute_correlated_price_increment(
     jax.Array
         Correlated increment for price Brownian motion
     """
-    return correlation * volatility_increment + jnp.sqrt(1.0 - correlation**2) * independent_increment
+    return (
+        correlation * volatility_increment
+        + jnp.sqrt(1.0 - correlation**2) * independent_increment
+    )
 
 
 def create_leadlag_control(
@@ -370,21 +387,27 @@ def compute_ensemble_kalman_gains(
 
     param_mean = jnp.mean(unconstrained_params, axis=0)
     param_deviations = unconstrained_params - param_mean
-    param_innovation_covariance = (param_deviations.T @ innovation_deviations) / (num_particles - 1.0)
+    param_innovation_covariance = (param_deviations.T @ innovation_deviations) / (
+        num_particles - 1.0
+    )
     parameter_gain = param_innovation_covariance / innovation_variance
 
     assert num_particles > 1, "Need more than one particle for state gain computation"
     state_matrix = jnp.stack([predicted_prices, predicted_volatilities], axis=1)
     state_mean = jnp.mean(state_matrix, axis=0)
     state_deviations = state_matrix - state_mean
-    state_innovation_covariance = (state_deviations.T @ innovation_deviations) / (num_particles - 1.0)
+    state_innovation_covariance = (state_deviations.T @ innovation_deviations) / (
+        num_particles - 1.0
+    )
     state_gain = state_innovation_covariance / innovation_variance
 
     return parameter_gain, state_gain, innovation_variance
 
 
 def ensemble_kalman_filter_step(
-    filter_state: tuple[RBergomiEnsemble, float, jax.Array, jax.Array, jax.Array, jax.Array],
+    filter_state: tuple[
+        RBergomiEnsemble, float, jax.Array, jax.Array, jax.Array, jax.Array
+    ],
     time_index: int | jax.Array,
 ) -> tuple[
     tuple[RBergomiEnsemble, float, jax.Array, jax.Array, jax.Array, jax.Array],
@@ -415,26 +438,30 @@ def ensemble_kalman_filter_step(
         vol_increments,
         indep_increments,
     ) = filter_state
-    hurst_params, vol_of_vol_params, correlation_params, initial_vol_params = constrain_theta(
-        ensemble.tH, ensemble.tNu, ensemble.tRho, ensemble.tV0
+    hurst_params, vol_of_vol_params, correlation_params, initial_vol_params = (
+        constrain_theta(ensemble.tH, ensemble.tNu, ensemble.tRho, ensemble.tV0)
     )
 
-    next_prices, next_volatilities, next_vol_drivers, next_price_drivers = evolve_particle_ensemble(
-        ensemble.S,
-        ensemble.V,
-        hurst_params,
-        vol_of_vol_params,
-        correlation_params,
-        initial_vol_params,
-        ensemble.X_driver,
-        ensemble.W_driver,
-        vol_increments,
-        indep_increments[time_index],
-        time_grid,
-        time_index,
+    next_prices, next_volatilities, next_vol_drivers, next_price_drivers = (
+        evolve_particle_ensemble(
+            ensemble.S,
+            ensemble.V,
+            hurst_params,
+            vol_of_vol_params,
+            correlation_params,
+            initial_vol_params,
+            ensemble.X_driver,
+            ensemble.W_driver,
+            vol_increments,
+            indep_increments[time_index],
+            time_grid,
+            time_index,
+        )
     )
     predicted_observations = jnp.log(jnp.clip(next_prices, 1e-12))
-    unconstrained_param_matrix = jnp.stack([ensemble.tH, ensemble.tNu, ensemble.tRho, ensemble.tV0], axis=1)
+    unconstrained_param_matrix = jnp.stack(
+        [ensemble.tH, ensemble.tNu, ensemble.tRho, ensemble.tV0], axis=1
+    )
     param_gain, state_gain, _ = compute_ensemble_kalman_gains(
         unconstrained_param_matrix,
         next_prices,
@@ -454,7 +481,9 @@ def ensemble_kalman_filter_step(
 
     state_updates = innovations[:, None] * state_gain[None, :]
     updated_prices = jnp.clip(next_prices + state_updates[:, 0], 1e-12, 1e12)
-    updated_volatilities = jnp.clip(next_volatilities + state_updates[:, 1], 1e-12, 1e12)
+    updated_volatilities = jnp.clip(
+        next_volatilities + state_updates[:, 1], 1e-12, 1e12
+    )
 
     updated_ensemble = RBergomiEnsemble(
         S=updated_prices,
@@ -516,7 +545,9 @@ def run_ensemble_kalman_filter(
         volatility_increments,
         independent_increments,
     )
-    (final_state, _) = lax.scan(ensemble_kalman_filter_step, initial_state, jnp.arange(num_steps))
+    (final_state, _) = lax.scan(
+        ensemble_kalman_filter_step, initial_state, jnp.arange(num_steps)
+    )
     final_ensemble, *_ = final_state
     return final_ensemble
 
@@ -542,7 +573,9 @@ def simulate_observation_logS(
     ) -> tuple[tuple[jax.Array, jax.Array, jax.Array, jax.Array], jax.Array]:
         S, V, X_drv, W_drv = carry
         vol_driver_increment = compute_fractional_brownian_increment(H, dW_V, t, k)
-        price_driver_increment = compute_correlated_price_increment(rho, dW_V[k], dW_perp[k])
+        price_driver_increment = compute_correlated_price_increment(
+            rho, dW_V[k], dW_perp[k]
+        )
         control, X_next, W_next = create_leadlag_control(
             t[k], t[k + 1], X_drv, vol_driver_increment, W_drv, price_driver_increment
         )
@@ -594,15 +627,23 @@ def sample_unconstrained_priors(
     """
     key_H, key_Nu, key_Rho, key_V0 = jax.random.split(random_key, 4)
 
-    hurst_constrained = jax.random.uniform(key_H, (num_particles,), minval=0.05, maxval=0.45)
+    hurst_constrained = jax.random.uniform(
+        key_H, (num_particles,), minval=0.05, maxval=0.45
+    )
     tH_samples = jnp.log(hurst_constrained) - jnp.log1p(-hurst_constrained)
 
-    tNu_samples = jax.random.uniform(key_Nu, (num_particles,), minval=jnp.log(0.3), maxval=jnp.log(3.0))
+    tNu_samples = jax.random.uniform(
+        key_Nu, (num_particles,), minval=jnp.log(0.3), maxval=jnp.log(3.0)
+    )
 
-    correlation_constrained = jax.random.uniform(key_Rho, (num_particles,), minval=-0.95, maxval=0.95)
+    correlation_constrained = jax.random.uniform(
+        key_Rho, (num_particles,), minval=-0.95, maxval=0.95
+    )
     tRho_samples = jnp.arctanh(correlation_constrained)
 
-    tV0_samples = jax.random.uniform(key_V0, (num_particles,), minval=jnp.log(0.005), maxval=jnp.log(0.3))
+    tV0_samples = jax.random.uniform(
+        key_V0, (num_particles,), minval=jnp.log(0.005), maxval=jnp.log(0.3)
+    )
 
     return tH_samples, tNu_samples, tRho_samples, tV0_samples
 
@@ -707,7 +748,9 @@ if __name__ == "__main__":
     trial_keys = jax.random.split(key, num_trials)
 
     for i in range(num_trials):
-        est, prior = run_single_estimation_with_key(trial_keys[i], K, N, R, H_star, nu_star, rho_star, v0_star)
+        est, prior = run_single_estimation_with_key(
+            trial_keys[i], K, N, R, H_star, nu_star, rho_star, v0_star
+        )
         sum_sq_err["H"] += (est["H"] - H_star) ** 2
         sum_sq_err["nu"] += (est["nu"] - nu_star) ** 2
         sum_sq_err["rho"] += (est["rho"] - rho_star) ** 2
@@ -717,8 +760,12 @@ if __name__ == "__main__":
         sum_sq_err_prior["rho"] += (prior["rho"] - rho_star) ** 2
         sum_sq_err_prior["v0"] += (prior["v0"] - v0_star) ** 2
 
-    mse_err: dict[str, float] = {k: v / float(num_trials) for k, v in sum_sq_err.items()}
-    mse_err_prior: dict[str, float] = {k: v / float(num_trials) for k, v in sum_sq_err_prior.items()}
+    mse_err: dict[str, float] = {
+        k: v / float(num_trials) for k, v in sum_sq_err.items()
+    }
+    mse_err_prior: dict[str, float] = {
+        k: v / float(num_trials) for k, v in sum_sq_err_prior.items()
+    }
 
     print("Mean squared parameter estimation error (MSE) over", num_trials, "keys:")
     print(f"  H   : {mse_err['H']:.6f} (prior: {mse_err_prior['H']:.6f})")

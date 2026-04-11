@@ -233,7 +233,9 @@ def plot_window_covariance_heatmaps(
         if idx >= count:
             ax.axis("off")
             continue
-        heatmap = ax.imshow(matrices[idx], cmap="viridis", vmin=vmin, vmax=vmax, aspect="auto")
+        heatmap = ax.imshow(
+            matrices[idx], cmap="viridis", vmin=vmin, vmax=vmax, aspect="auto"
+        )
         ax.set_title(f"Window {idx}")
         ax.set_xticks([])
         ax.set_yticks([])

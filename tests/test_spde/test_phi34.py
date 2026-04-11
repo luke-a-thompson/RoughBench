@@ -163,7 +163,11 @@ def test_isotropy_equal_time_power(phi_snaps: jax.Array) -> None:
         mask = counts >= 8
 
     sel: jax.Array = relstd[mask]
-    median_relstd: float = float(jnp.median(sel)) if bool(jnp.any(mask).item()) else float(jnp.median(relstd))
+    median_relstd: float = (
+        float(jnp.median(sel))
+        if bool(jnp.any(mask).item())
+        else float(jnp.median(relstd))
+    )
 
     # Allow moderate sampling noise; isotropy should keep this reasonably small
     assert median_relstd < 0.35
@@ -190,6 +194,8 @@ def test_time_reversal_antisymmetry(phi_snaps: jax.Array) -> None:
     taus: list[int] = [t for t in [1, 2, 4] if t < T]
     for tau in taus:
         s_t: jax.Array = _antisymmetric_statistic(phi_snaps, tau)
-        s_bar, s_se = _block_mean_and_se(s_t, n_blocks=min(16, max(2, int(s_t.shape[0]) // 2)))
+        s_bar, s_se = _block_mean_and_se(
+            s_t, n_blocks=min(16, max(2, int(s_t.shape[0]) // 2))
+        )
         # Accept if within 4 SE (plus tiny epsilon), which is generous for short runs
         assert abs(s_bar) <= 4.0 * (s_se + 1e-8)

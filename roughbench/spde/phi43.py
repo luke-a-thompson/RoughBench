@@ -128,11 +128,7 @@ def _paper_renorm_geometry(N: int, eps: float) -> tuple[np.ndarray, np.ndarray]:
     full_modes = np.arange(-2 * N, 2 * N + 1, dtype=np.int64)
     mx, my, mz = np.meshgrid(full_modes, full_modes, full_modes, indexing="ij")
 
-    main_mask = (
-        (np.abs(mx) <= N)
-        & (np.abs(my) <= N)
-        & (np.abs(mz) <= N)
-    )
+    main_mask = (np.abs(mx) <= N) & (np.abs(my) <= N) & (np.abs(mz) <= N)
 
     shift_x = np.where(mx > N, 1, np.where(mx < -N, -1, 0))
     shift_y = np.where(my > N, 1, np.where(my < -N, -1, 0))
@@ -143,7 +139,9 @@ def _paper_renorm_geometry(N: int, eps: float) -> tuple[np.ndarray, np.ndarray]:
     alias_z = mz - M * shift_z
 
     centered_modes = _centered_mode_numbers(N)
-    lam_box = _laplacian_symbol_from_mode_numbers_np(centered_modes, centered_modes, centered_modes, eps)
+    lam_box = _laplacian_symbol_from_mode_numbers_np(
+        centered_modes, centered_modes, centered_modes, eps
+    )
     alias_lam = lam_box[alias_x + N, alias_y + N, alias_z + N]
 
     return main_mask, alias_lam
@@ -183,7 +181,7 @@ def compute_C0_C1(params: SimParams) -> tuple[float, float, float, float, float]
     lam_safe = lam_box.copy()
     lam_safe[zero_index] = np.inf
 
-    c0 = float((2.0 ** -3) * np.sum(0.5 / lam_safe))
+    c0 = float((2.0**-3) * np.sum(0.5 / lam_safe))
 
     positive_lam = lam_box[lam_box > 0.0]
     lam_min_pos = float(np.min(positive_lam))
@@ -215,8 +213,8 @@ def compute_C0_C1(params: SimParams) -> tuple[float, float, float, float, float]
         else:
             integrand12[i] = 0.0
 
-    c11 = float((2.0 ** -5) * np.trapezoid(integrand11, taus))
-    c12 = float((2.0 ** -5) * np.trapezoid(integrand12, taus))
+    c11 = float((2.0**-5) * np.trapezoid(integrand11, taus))
+    c12 = float((2.0**-5) * np.trapezoid(integrand12, taus))
     c1 = c11 + c12
     cmass = 3.0 * c0 - 9.0 * c1
     return c0, c11, c12, c1, cmass
@@ -277,7 +275,7 @@ def semi_implicit_step(
     This is a numerical integrator for the Zhu-Zhu finite-dimensional lattice SDE,
     not a claim from the paper itself.
     """
-    drift = -(phi ** 3) + float(pre.Cmass) * phi
+    drift = -(phi**3) + float(pre.Cmass) * phi
     rhs = phi + float(params.dt) * drift
 
     key, subkey = jax.random.split(key)
@@ -328,7 +326,9 @@ def simulate(
         state_next, key_out = semi_implicit_step(state, key_in, params, pre)
         return (state_next, key_out), state_next
 
-    (phi_final, _), traj = jax.lax.scan(one_step, (phi, key), xs=None, length=params.steps)
+    (phi_final, _), traj = jax.lax.scan(
+        one_step, (phi, key), xs=None, length=params.steps
+    )
 
     snapshots: Optional[jax.Array] = None
     if snapshot_every > 0:
@@ -355,7 +355,7 @@ def two_point_correlation(phi: jax.Array) -> jax.Array:
     """Equal-time two-point correlation from a single snapshot."""
     M = phi.shape[0]
     power = jnp.abs(jnp.fft.fftn(phi, axes=(0, 1, 2))) ** 2
-    return jnp.fft.ifftn(power, axes=(0, 1, 2)).real / float(M ** 3)
+    return jnp.fft.ifftn(power, axes=(0, 1, 2)).real / float(M**3)
 
 
 def to_tcxyz(snaps: jax.Array) -> jax.Array:

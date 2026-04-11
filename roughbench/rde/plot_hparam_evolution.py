@@ -45,11 +45,19 @@ def track_ensemble_evolution(
 
     # Store initial conditions
     H0, nu0, rho0, v0_0 = constrain_theta(ens0.tH, ens0.tNu, ens0.tRho, ens0.tV0)
-    constrained_history = constrained_history.at[0].set(jnp.stack([H0, nu0, rho0, v0_0], axis=1))
-    unconstrained_history = unconstrained_history.at[0].set(jnp.stack([ens0.tH, ens0.tNu, ens0.tRho, ens0.tV0], axis=1))
+    constrained_history = constrained_history.at[0].set(
+        jnp.stack([H0, nu0, rho0, v0_0], axis=1)
+    )
+    unconstrained_history = unconstrained_history.at[0].set(
+        jnp.stack([ens0.tH, ens0.tNu, ens0.tRho, ens0.tV0], axis=1)
+    )
     state_history = state_history.at[0].set(jnp.stack([ens0.S, ens0.V], axis=1))
-    mean_history = mean_history.at[0].set(jnp.array([jnp.mean(H0), jnp.mean(nu0), jnp.mean(rho0), jnp.mean(v0_0)]))
-    std_history = std_history.at[0].set(jnp.array([jnp.std(H0), jnp.std(nu0), jnp.std(rho0), jnp.std(v0_0)]))
+    mean_history = mean_history.at[0].set(
+        jnp.array([jnp.mean(H0), jnp.mean(nu0), jnp.mean(rho0), jnp.mean(v0_0)])
+    )
+    std_history = std_history.at[0].set(
+        jnp.array([jnp.std(H0), jnp.std(nu0), jnp.std(rho0), jnp.std(v0_0)])
+    )
 
     # Run filter step by step
     ens = ens0
@@ -60,7 +68,9 @@ def track_ensemble_evolution(
 
         # Store results
         H_k, nu_k, rho_k, v0_k = constrain_theta(ens.tH, ens.tNu, ens.tRho, ens.tV0)
-        constrained_history = constrained_history.at[k + 1].set(jnp.stack([H_k, nu_k, rho_k, v0_k], axis=1))
+        constrained_history = constrained_history.at[k + 1].set(
+            jnp.stack([H_k, nu_k, rho_k, v0_k], axis=1)
+        )
         unconstrained_history = unconstrained_history.at[k + 1].set(
             jnp.stack([ens.tH, ens.tNu, ens.tRho, ens.tV0], axis=1)
         )
@@ -68,7 +78,9 @@ def track_ensemble_evolution(
         mean_history = mean_history.at[k + 1].set(
             jnp.array([jnp.mean(H_k), jnp.mean(nu_k), jnp.mean(rho_k), jnp.mean(v0_k)])
         )
-        std_history = std_history.at[k + 1].set(jnp.array([jnp.std(H_k), jnp.std(nu_k), jnp.std(rho_k), jnp.std(v0_k)]))
+        std_history = std_history.at[k + 1].set(
+            jnp.array([jnp.std(H_k), jnp.std(nu_k), jnp.std(rho_k), jnp.std(v0_k)])
+        )
 
     return {
         "constrained_params": constrained_history,
@@ -183,7 +195,9 @@ def plot_parameter_cloud_evolution(
     else:
         out_dir = Path(__file__).resolve().parents[2] / "docs" / "assets"
         out_dir.mkdir(parents=True, exist_ok=True)
-        plt.savefig(out_dir / "hparam_cloud_evolution.png", dpi=300, bbox_inches="tight")
+        plt.savefig(
+            out_dir / "hparam_cloud_evolution.png", dpi=300, bbox_inches="tight"
+        )
 
     plt.show()
 
@@ -213,7 +227,9 @@ def plot_ensemble_statistics_evolution(
         # Plot confidence bands (mean ± 2σ)
         upper = means[:, i] + 2 * stds[:, i]
         lower = means[:, i] - 2 * stds[:, i]
-        ax.fill_between(time_grid, lower, upper, alpha=0.3, color="blue", label="±2σ band")
+        ax.fill_between(
+            time_grid, lower, upper, alpha=0.3, color="blue", label="±2σ band"
+        )
 
         # Plot true value
         ax.axhline(
@@ -237,7 +253,9 @@ def plot_ensemble_statistics_evolution(
     else:
         out_dir = Path(__file__).resolve().parents[2] / "docs" / "assets"
         out_dir.mkdir(parents=True, exist_ok=True)
-        plt.savefig(out_dir / "hparam_statistics_evolution.png", dpi=300, bbox_inches="tight")
+        plt.savefig(
+            out_dir / "hparam_statistics_evolution.png", dpi=300, bbox_inches="tight"
+        )
 
     plt.show()
 
@@ -319,7 +337,9 @@ def create_parameter_cloud_animation(
         return scat, time_text
 
     # Create animation
-    ani = animation.FuncAnimation(fig, animate, frames=K + 1, interval=100, blit=True, repeat=True)
+    ani = animation.FuncAnimation(
+        fig, animate, frames=K + 1, interval=100, blit=True, repeat=True
+    )
 
     if save_path:
         ani.save(save_path, writer="pillow", fps=10)
