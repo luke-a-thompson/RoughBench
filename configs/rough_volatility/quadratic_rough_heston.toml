@@ -1,5 +1,5 @@
 [model]
-family = "rough_bergomi"
+family = "quadratic_rough_heston"
 
 [general]
 num_paths = 32896
@@ -12,7 +12,15 @@ noise_timesteps = 256
 rde_timesteps = 768
 
 v_0 = 0.04
-nu = 1.991
 hurst = 0.1
-rho = -0.848
+a = 2.0
+b = 0.1
+c = 0.02
+lambda_ = 1.0
+eta = 0.3
 s_0 = 1.0
+
+[external_variance]
+mode = "volterra_simulated"
+theta_level = 0.04
+truncation_eps = 1e-8

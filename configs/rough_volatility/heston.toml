@@ -1,5 +1,5 @@
 [model]
-family = "rough_bergomi"
+family = "heston"
 
 [general]
 num_paths = 32896
@@ -12,7 +12,8 @@ noise_timesteps = 256
 rde_timesteps = 768
 
 v_0 = 0.04
-nu = 1.991
-hurst = 0.1
-rho = -0.848
+rho = -0.7
+nu = 0.5
+lambda_ = 1.5
+v_bar = 0.04
 s_0 = 1.0

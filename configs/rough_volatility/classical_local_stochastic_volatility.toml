@@ -1,5 +1,5 @@
 [model]
-family = "rough_bergomi"
+family = "classical_local_stochastic_volatility"
 
 [general]
 num_paths = 32896
@@ -12,7 +12,14 @@ noise_timesteps = 256
 rde_timesteps = 768
 
 v_0 = 0.04
-nu = 1.991
-hurst = 0.1
-rho = -0.848
+rho = -0.3
 s_0 = 1.0
+
+xi_0 = 0.2
+xi_s = 0.001
+xi_v = 0.1
+
+lambda_ = 1.0
+v_bar = 0.04
+f2_0 = 0.08
+f2_1 = 0.05

@@ -1,9 +1,15 @@
+[model]
+family = "black_scholes"
+
 [general]
-num_paths = 1000
+num_paths = 32896
 seed = 42
+log_price = true
+plot_variance = false
 
 [parameters]
-noise_timesteps = 1028
-rde_timesteps = 8192
+noise_timesteps = 256
+rde_timesteps = 768
 
 v_0 = 0.04
+s_0 = 1.0
