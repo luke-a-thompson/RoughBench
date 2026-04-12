@@ -90,13 +90,13 @@ def generate_simple_rbergomi_data(
     np.random.seed(seed)
     rb = rBergomi(n=n, N=N, T=T, a=a, rho=rho, eta=eta, xi=xi)
 
-    dW1 = rb.dW1()
-    dW2 = rb.dW2()
-    dB = rb.dB(dW1, dW2)  # uses rb.rho by default
+    dW1 = rb.generate_variance_increments()
+    dW2 = rb.generate_price_increments()
+    dB = rb.correlate_increments(dW1, dW2)
 
-    Y = rb.Y(dW1)
-    V = rb.V(Y)  # V_t = xi * exp(eta Y_t - 0.5 eta^2 t^(2a+1))
-    S = rb.S(V, dB, S0=S0)
+    Y = rb.volterra_process(dW1)
+    V = rb.variance_process(Y)  # V_t = xi * exp(eta Y_t - 0.5 eta^2 t^(2a+1))
+    S = rb.price_process(V, dB, S0=S0)
     log_S = np.log(S)
 
     # Price Brownian path B_t, with B_0 = 0 and increments dB on each step.
