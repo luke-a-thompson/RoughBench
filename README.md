@@ -5,7 +5,7 @@
 * The [Bonesini et al. (2026)](https://arxiv.org/abs/2412.21192) RDE framework for rough volatility models
 * A synthetic diffusion over the SPD manifold under the affine-invariant Riemmanian metric (AIRM)
 * A synthetic SO(3) trajectory generator following that used in [Bastian, et al. (2025)](https://arxiv.org/html/2508.07775v1)
-* An implementation of a Kalman filter for parameter estimation which can be cast as a McKean-Vlasov mean-field RDE following [Cpghi, et al. 2022](https://arxiv.org/abs/2107.06621)
+* An implementation of a Kalman filter for parameter estimation which can be cast as a McKean-Vlasov mean-field RDE following [Coghi, et al. 2022](https://arxiv.org/abs/2107.06621)
 * A Jax implementation of the [Zhu, Zhu. (2015)](https://arxiv.org/abs/1508.05613) lattice approximation to the dynamical phi43 model from stochastic quantization
 
 ## Installation
