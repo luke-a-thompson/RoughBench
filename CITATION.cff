@@ -6,6 +6,7 @@ authors:
     given-names: "Luke"
     email: "luke.thompson@sydney.edu.au"
 version: "0.1.2"
+doi: "10.5281/zenodo.20394297"
 license: "MIT"
 repository-code: "https://github.com/luke-a-thompson/roughbench"
 url: "https://github.com/luke-a-thompson/roughbench"
