@@ -2,14 +2,14 @@
 family = "classical_local_stochastic_volatility"
 
 [general]
-num_paths = 32896
+num_paths = 8192
 seed = 42
 log_price = true
 plot_variance = false
 
 [parameters]
-noise_timesteps = 256
-rde_timesteps = 768
+noise_timesteps = 56
+rde_timesteps = 256
 
 v_0 = 0.04
 rho = -0.3

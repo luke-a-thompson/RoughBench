@@ -42,15 +42,26 @@ from roughbench.rde.rough_volatility import (
 )
 
 
+DEFAULT_CONFIG_PATH = Path("configs/rough_volatility/rBergomi.toml")
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate rough-volatility Monte Carlo paths from a TOML config."
+        description=(
+            "Generate rough-volatility Monte Carlo paths from one TOML config, "
+            "a config directory, or all configs in the rough-volatility config set."
+        )
     )
     parser.add_argument(
         "--config",
         type=str,
-        default="configs/rough_volatility/rBergomi.toml",
-        help="Path to TOML config file.",
+        default=str(DEFAULT_CONFIG_PATH),
+        help="Path to a TOML config file or a directory containing TOML configs.",
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Generate every TOML config in the resolved rough-volatility config directory.",
     )
     parser.add_argument(
         "--seed", type=int, default=None, help="Optional override for random seed."
@@ -71,6 +82,26 @@ def _parse_args() -> argparse.Namespace:
         "--no-plot", action="store_true", help="Disable diagnostic plotting."
     )
     return parser.parse_args()
+
+
+def _resolve_config_paths(config_arg: str, run_all: bool) -> list[Path]:
+    config_path = Path(config_arg)
+    if config_path.is_dir():
+        config_dir = config_path
+        config_paths = sorted(config_dir.glob("*.toml"))
+    elif run_all:
+        config_dir = config_path.parent
+        config_paths = sorted(config_dir.glob("*.toml"))
+    else:
+        if not config_path.exists():
+            raise FileNotFoundError(f"Config file not found: {config_path}")
+        return [config_path]
+
+    if not config_dir.exists():
+        raise FileNotFoundError(f"Config directory not found: {config_dir}")
+    if not config_paths:
+        raise FileNotFoundError(f"No TOML configs found in: {config_dir}")
+    return config_paths
 
 
 def _normalize_model_name(value: str) -> str:
@@ -491,20 +522,59 @@ def plot_bonesini_monte_carlo(
 
 def main() -> None:
     args = _parse_args()
-    config = load_config(args.config)
+    output_dir = Path(args.output_dir).resolve() if args.output_dir else None
+    config_paths = _resolve_config_paths(args.config, args.all)
+
+    generated_models: list[str] = []
+    for index, config_path in enumerate(config_paths, start=1):
+        if len(config_paths) > 1:
+            print(f"[{index}/{len(config_paths)}] Loading {config_path}")
+
+        model_name = _run_single_config(
+            config_path=config_path,
+            seed_override=args.seed,
+            num_paths_override=args.num_paths,
+            output_dir=output_dir,
+            no_plot=bool(args.no_plot),
+        )
+        generated_models.append(model_name)
+        if len(config_paths) > 1 and index != len(config_paths):
+            print("")
+
+    print("")
+    if len(generated_models) == 1:
+        print(
+            "Rough-volatility output saved under data/rough_volatility and mirrored plots under docs/rde_bench/rough_volatility"
+        )
+    else:
+        generated_list = ", ".join(generated_models)
+        print(f"Generated {len(generated_models)} rough-volatility models: {generated_list}")
+        print(
+            "All rough-volatility outputs saved under data/rough_volatility and mirrored plots under docs/rde_bench/rough_volatility"
+        )
+
+
+def _run_single_config(
+    *,
+    config_path: Path,
+    seed_override: int | None,
+    num_paths_override: int | None,
+    output_dir: Path | None,
+    no_plot: bool,
+) -> str:
+    config = load_config(str(config_path))
     general = config_section(config, "general")
     params = config_section(config, "parameters")
     external_cfg = config_section(config, "external_variance")
 
-    model_name = _infer_model_name(args.config, config)
-    num_paths = int(args.num_paths or general.get("num_paths", 128))
-    seed = int(args.seed if args.seed is not None else general.get("seed", 42))
+    model_name = _infer_model_name(str(config_path), config)
+    num_paths = int(num_paths_override or general.get("num_paths", 128))
+    seed = int(seed_override if seed_override is not None else general.get("seed", 42))
     noise_timesteps = int(params.get("noise_timesteps", 128))
     rde_timesteps = int(params.get("rde_timesteps", 256))
     s_0 = float(params.get("s_0", 1.0))
     use_log_price = bool(general.get("log_price", True))
     plot_variance = bool(general.get("plot_variance", True))
-    output_dir = Path(args.output_dir).resolve() if args.output_dir else None
 
     model_spec, requires_external_variance = _build_model_spec(model_name, params)
 
@@ -535,7 +605,7 @@ def main() -> None:
             seed=seed,
         )
 
-    if not bool(args.no_plot):
+    if not no_plot:
         plot_bonesini_monte_carlo(
             solutions,
             model_spec,
@@ -555,10 +625,7 @@ def main() -> None:
             driver=drivers,
         )
 
-    print("")
-    print(
-        "All rough-volatility outputs saved under data/rough_volatility and mirrored plots under docs/rde_bench/rough_volatility"
-    )
+    return model_spec.name
 
 
 if __name__ == "__main__":

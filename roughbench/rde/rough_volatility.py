@@ -236,7 +236,7 @@ def solve_wong_zakai(
 
     return dfx.diffeqsolve(
         terms=terms,
-        solver=dfx.Heun(),
+        solver=dfx.Tsit5(),
         t0=0.0,
         t1=1.0,
         dt0=1.0 / rde_timesteps,
