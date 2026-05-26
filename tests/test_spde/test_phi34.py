@@ -2,7 +2,7 @@ import pytest
 import jax
 import jax.numpy as jnp
 
-from roughbench.spde.phi4_3_zhu_zhu_corrected import SimParams, precompute, simulate
+from roughbench.spde.phi43 import SimParams, precompute, simulate
 
 
 def _block_mean_and_se(series: jax.Array, n_blocks: int = 16) -> tuple[float, float]:

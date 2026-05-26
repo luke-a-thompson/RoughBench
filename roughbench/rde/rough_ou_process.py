@@ -1,8 +1,8 @@
 import jax
 import jax.numpy as jnp
 import diffrax as dfx
-from quicksig.drivers.drivers import fractional_bm_driver
-from quicksig.paths.paths import Path
+
+from roughbench.drivers import fractional_bm_driver
 
 
 def rough_ou_process(
@@ -14,7 +14,7 @@ def rough_ou_process(
     sigma: float,
     hurst: float,
     x0: float | None = None,
-) -> Path:
+) -> jax.Array:
     """
     Generates a rough Ornstein-Uhlenbeck process path using fractional Brownian motion and Heun solver.
 
@@ -41,7 +41,7 @@ def rough_ou_process(
         x0: initial value (defaults to mu if not provided)
 
     Returns:
-        A Path object of shape (timesteps + 1, dim) representing the rough OU process.
+        Array of shape (timesteps + 1, dim) representing the rough OU process.
     """
     if theta <= 0:
         raise ValueError(f"theta must be positive. Got {theta}")
@@ -71,7 +71,7 @@ def rough_ou_process(
         return sigma * jnp.eye(dim)
 
     # Create linear interpolation control from fractional Brownian motion
-    fbm_control = dfx.LinearInterpolation(ts=ts, ys=fbm_path.path)
+    fbm_control = dfx.LinearInterpolation(ts=ts, ys=fbm_path)
 
     # Build the SDE terms
     terms = dfx.MultiTerm(
@@ -92,7 +92,7 @@ def rough_ou_process(
     )
 
     assert solution.ys is not None
-    return Path(solution.ys, (0, timesteps + 1))
+    return solution.ys
 
 
 if __name__ == "__main__":
@@ -116,7 +116,7 @@ if __name__ == "__main__":
         rough_ou_process, in_axes=(0, None, None, None, None, None, None, None)
     )(keys, timesteps, dim, theta, mu, sigma, hurst, x0)
 
-    rough_ou_paths_np = jax.device_get(batched_rough_ou_paths.path)
+    rough_ou_paths_np = jax.device_get(batched_rough_ou_paths)
 
     plt.figure(figsize=(10, 6))
     for i in range(batch_size):

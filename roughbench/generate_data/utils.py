@@ -4,13 +4,30 @@ from pathlib import Path
 from collections.abc import Iterator
 import contextlib
 import tomllib
+from typing import Literal
 
 import matplotlib
 import matplotlib.axes
 import matplotlib.figure
+import matplotlib.gridspec
 import matplotlib.pyplot as plt
 
 import numpy as np
+
+SDE_COLORMAP = "viridis"
+
+_SDE_PASTEL_COLORS = [
+    "#0079ff",
+    "#ffb84c",
+    "#00dfa2",
+    "#f266ab",
+    "#a459d1",
+    "#5f264a",
+    "#d4adfc",
+    "#7f7f7f",
+    "#b3e5be",
+    "#97deff",
+]
 
 
 def _repo_root(this_file: Path) -> Path:
@@ -189,8 +206,50 @@ def _roughbench_rcparams(font_scale: float = 1.0) -> dict[str, object]:
     }
 
 
+def _sde_rcparams(font_scale: float = 1.0) -> dict[str, object]:
+    """Aleatory-inspired style for SDE/RDE path plots."""
+    rc = _roughbench_rcparams(font_scale=font_scale)
+    rc.update(
+        {
+            "figure.dpi": 200,
+            "figure.frameon": True,
+            "figure.facecolor": "white",
+            "axes.facecolor": "white",
+            "axes.grid": True,
+            "axes.grid.axis": "both",
+            "axes.axisbelow": True,
+            "axes.spines.left": True,
+            "axes.spines.bottom": True,
+            "axes.spines.top": False,
+            "axes.spines.right": False,
+            "axes.prop_cycle": matplotlib.cycler(color=_SDE_PASTEL_COLORS),
+            "font.family": "serif",
+            "font.serif": [
+                "New Century Schoolbook",
+                "Century Schoolbook L",
+                "DejaVu Serif",
+                "serif",
+            ],
+            "text.usetex": False,
+            "lines.linewidth": 1.0,
+            "grid.color": (0.76, 0.78, 0.83),
+            "grid.linestyle": "--",
+            "grid.linewidth": 0.8,
+            "grid.alpha": 0.5,
+            "legend.frameon": True,
+            "legend.edgecolor": "0.8",
+            "savefig.facecolor": "white",
+            "savefig.transparent": False,
+        }
+    )
+    return rc
+
+
 @contextlib.contextmanager
-def plotting_context(font_scale: float = 1.0) -> Iterator[object]:
+def plotting_context(
+    font_scale: float = 1.0,
+    style: Literal["roughbench", "sde"] = "roughbench",
+) -> Iterator[object]:
     """Context manager applying RoughBench plot style.
 
     Usage:
@@ -200,9 +259,104 @@ def plotting_context(font_scale: float = 1.0) -> Iterator[object]:
 
     Yields the imported pyplot module.
     """
-    rc = _roughbench_rcparams(font_scale=font_scale)
+    rc = (
+        _sde_rcparams(font_scale=font_scale)
+        if style == "sde"
+        else _roughbench_rcparams(font_scale=font_scale)
+    )
     with matplotlib.rc_context(rc=rc):
         yield plt
+
+
+def path_color(index: int, total: int, colormap: str = SDE_COLORMAP) -> object:
+    """Return a stable color for an ensemble path."""
+    if total <= 1:
+        return plt.get_cmap(colormap)(0.55)
+    return plt.get_cmap(colormap)(index / float(total - 1))
+
+
+def _final_value_colors(paths: np.ndarray, colormap: str) -> tuple[list[object], int]:
+    final_values = np.asarray(paths)[:, -1]
+    n_bins = max(1, int(np.sqrt(len(final_values))))
+    cm = plt.colormaps[colormap]
+    color_positions = np.linspace(0.0, 1.0, n_bins, endpoint=True)
+    if n_bins == 1:
+        return [cm(color_positions[0]) for _ in final_values], n_bins
+
+    _, bins = np.histogram(final_values, n_bins)
+    indices = np.digitize(final_values, bins[1:-1], right=False)
+    return [cm(color_positions[int(index)]) for index in indices], n_bins
+
+
+def draw_sde_paths(
+    *,
+    times: object,
+    paths: object,
+    title: str | None = None,
+    suptitle: str | None = None,
+    xlabel: str = "$t$",
+    ylabel: str = "$X(t)$",
+    expectation: object | None = None,
+    marginal: bool = True,
+    colormap: str = SDE_COLORMAP,
+    figsize: tuple[float, float] = (12.0, 7.0),
+) -> tuple[matplotlib.figure.Figure, matplotlib.axes.Axes, matplotlib.axes.Axes | None]:
+    """Draw SDE paths using Aleatory's horizontal draw layout."""
+    times_np = np.asarray(times)
+    paths_np = np.asarray(paths)
+    if paths_np.ndim != 2:
+        raise ValueError(f"Expected paths with shape (N, T), got {paths_np.shape}.")
+
+    colors, n_bins = _final_value_colors(paths_np, colormap)
+
+    if marginal:
+        fig = plt.figure(figsize=figsize)
+        gs = matplotlib.gridspec.GridSpec(1, 5)
+        ax_paths = fig.add_subplot(gs[:4])
+        ax_marginal = fig.add_subplot(gs[4:], sharey=ax_paths)
+
+        final_values = paths_np[:, -1]
+        _, _, patches = ax_marginal.hist(
+            final_values, n_bins, orientation="horizontal", density=True
+        )
+        cm = plt.colormaps[colormap]
+        color_positions = np.linspace(0.0, 1.0, n_bins, endpoint=True)
+        for color_position, patch in zip(color_positions, patches):
+            plt.setp(patch, "facecolor", cm(color_position))
+        plt.setp(ax_marginal.get_yticklabels(), visible=False)
+        ax_marginal.set_title(
+            "$X_T$ Marginal"
+            if xlabel == "$t$" and ylabel == "$X(t)$"
+            else "Final Marginal"
+        )
+        plt.subplots_adjust(wspace=0.025, hspace=0.025)
+    else:
+        fig, ax_paths = plt.subplots(figsize=figsize)
+        ax_marginal = None
+
+    for path, color in zip(paths_np, colors):
+        ax_paths.plot(times_np, path, "-", color=color, lw=1.0)
+
+    if expectation is not None:
+        ax_paths.plot(
+            times_np,
+            np.asarray(expectation),
+            "--",
+            lw=1.75,
+            label="Marginal Expectations",
+        )
+        ax_paths.legend()
+
+    if suptitle is not None:
+        fig.suptitle(suptitle)
+    ax_paths.set_title(
+        title
+        if title is not None
+        else "Monte Carlo Simulated Paths $\\{X_t, t \\in [t_0, T]\\}$"
+    )
+    ax_paths.set_xlabel(xlabel)
+    ax_paths.set_ylabel(ylabel)
+    return fig, ax_paths, ax_marginal
 
 
 def create_figure(
@@ -226,6 +380,7 @@ def decorate_axes(
     ylabel: str | None = None,
     legend: bool = False,
     legend_loc: str = "best",
+    legend_frame: bool = False,
 ) -> None:
     """Apply consistent decorations to a single Axes object."""
 
@@ -245,7 +400,7 @@ def decorate_axes(
     if legend:
         handles, labels = ax.get_legend_handles_labels()
         if labels:
-            ax.legend(loc=legend_loc, frameon=False)
+            ax.legend(loc=legend_loc, frameon=legend_frame)
 
 
 def finalize_plot(tight_layout: bool = True) -> None:

@@ -4,13 +4,12 @@ from pathlib import Path
 import numpy as np
 
 from roughbench.rde.simple_rbergomi import rBergomi
-from utils import (
-    save_plot,
-    save_npz,
-    plotting_context,
-    create_figure,
-    decorate_axes,
+from roughbench.generate_data.utils import (
+    draw_sde_paths,
     finalize_plot,
+    plotting_context,
+    save_npz,
+    save_plot,
 )
 
 
@@ -130,16 +129,16 @@ def _save_plots(
     k = min(max_paths, num_paths)
     idx = np.linspace(0, num_paths - 1, k, dtype=int)
 
-    with plotting_context(font_scale=1.1):
-        _, ax = create_figure(figsize=(10.0, 6.0))
-        for i in idx:
-            ax.plot(ts, log_price[i], color="gray", alpha=0.5, linewidth=0.8)
-        decorate_axes(
-            ax,
-            title="Simple rBergomi Monte Carlo (log-price)",
-            xlabel="Time",
+    with plotting_context(font_scale=1.1, style="sde"):
+        sampled_log_price = log_price[idx]
+        draw_sde_paths(
+            times=ts,
+            paths=sampled_log_price,
+            suptitle="Simple rBergomi",
             ylabel="Log-Price",
-            legend=False,
+            expectation=np.mean(sampled_log_price, axis=0),
+            marginal=True,
+            figsize=(12.0, 7.0),
         )
         finalize_plot(tight_layout=True)
     save_plot(
@@ -149,16 +148,16 @@ def _save_plots(
         dpi=200,
     )
 
-    with plotting_context(font_scale=1.1):
-        _, ax = create_figure(figsize=(10.0, 6.0))
-        for i in idx:
-            ax.plot(ts, variance[i], color="tab:green", alpha=0.25, linewidth=0.8)
-        decorate_axes(
-            ax,
-            title="Simple rBergomi Monte Carlo (variance)",
-            xlabel="Time",
+    with plotting_context(font_scale=1.1, style="sde"):
+        sampled_variance = variance[idx]
+        draw_sde_paths(
+            times=ts,
+            paths=sampled_variance,
+            suptitle="Simple rBergomi Variance",
             ylabel="Instantaneous variance",
-            legend=False,
+            expectation=np.mean(sampled_variance, axis=0),
+            marginal=True,
+            figsize=(12.0, 7.0),
         )
         finalize_plot(tight_layout=True)
     save_plot(

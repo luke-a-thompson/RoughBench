@@ -2,7 +2,7 @@
 family = "rough_heston"
 
 [general]
-num_paths = 8192
+num_paths = 512
 seed = 42
 log_price = true
 plot_variance = false

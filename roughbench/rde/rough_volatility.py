@@ -7,7 +7,7 @@ import diffrax as dfx
 import jax
 import jax.numpy as jnp
 from jax import Array
-from stochastax.controls.drivers import (
+from roughbench.drivers import (
     bm_driver,
     correlate_bm_driver_against_reference,
     riemann_liouville_driver,
@@ -163,13 +163,13 @@ def _build_noise_drivers(
     key_W, key_B, key_V = jax.random.split(key, 3)
 
     W_path = bm_driver(key_W, noise_timesteps, 1)
-    W = jnp.squeeze(W_path.path)
+    W = jnp.squeeze(W_path)
 
     if model_spec.noise_family == NoiseFamily.ZERO:
         X = jnp.zeros_like(W)
     elif model_spec.noise_family == NoiseFamily.INDEPENDENT_BROWNIAN:
         B_path = bm_driver(key_B, noise_timesteps, 1)
-        X = jnp.squeeze(B_path.path)
+        X = jnp.squeeze(B_path)
     elif model_spec.noise_family == NoiseFamily.PAPER_ROUGH_BERGOMI:
         B_path = bm_driver(key_B, noise_timesteps, 1)
         W1_corr = correlate_bm_driver_against_reference(W_path, B_path, model_spec.rho)
@@ -177,7 +177,7 @@ def _build_noise_drivers(
         X = jnp.squeeze(
             riemann_liouville_driver(
                 key_V, noise_timesteps, model_spec.hurst, W1_corr
-            ).path
+            )
         ) / gamma_h
     elif model_spec.noise_family == NoiseFamily.EXTERNAL:
         raise NotImplementedError(
@@ -277,12 +277,8 @@ def simulate_rough_heston_variance_paths(
     keys = jax.random.split(key, 2 * num_paths)
     W_keys = keys[:num_paths]
     B_keys = keys[num_paths:]
-    W_paths = jax.vmap(lambda k: jnp.squeeze(bm_driver(k, noise_timesteps, 1).path))(
-        W_keys
-    )
-    B_paths = jax.vmap(lambda k: jnp.squeeze(bm_driver(k, noise_timesteps, 1).path))(
-        B_keys
-    )
+    W_paths = jax.vmap(lambda k: jnp.squeeze(bm_driver(k, noise_timesteps, 1)))(W_keys)
+    B_paths = jax.vmap(lambda k: jnp.squeeze(bm_driver(k, noise_timesteps, 1)))(B_keys)
 
     dW = jnp.diff(W_paths, axis=1)
     dB = jnp.diff(B_paths, axis=1)
@@ -330,9 +326,7 @@ def simulate_quadratic_rough_heston_variance_paths(
     theta = v_0 if theta_level is None else theta_level
 
     W_keys = jax.random.split(key, num_paths)
-    W_paths = jax.vmap(lambda k: jnp.squeeze(bm_driver(k, noise_timesteps, 1).path))(
-        W_keys
-    )
+    W_paths = jax.vmap(lambda k: jnp.squeeze(bm_driver(k, noise_timesteps, 1)))(W_keys)
     dW = jnp.diff(W_paths, axis=1)
 
     V = jnp.full((num_paths, noise_timesteps + 1), v_0, dtype=W_paths.dtype)
@@ -612,7 +606,9 @@ def make_quadratic_rough_heston_model_spec(
     eta: float,
     theta: Callable[[float], Array] | None = None,
 ) -> BonesiniModelSpec:
-    quad = lambda v: a * ((v - b) ** 2) + c
+    def quad(v: Array) -> Array:
+        return a * ((v - b) ** 2) + c
+
     return BonesiniModelSpec(
         name=ModelFamily.QUADRATIC_ROUGH_HESTON,
         hurst=hurst,

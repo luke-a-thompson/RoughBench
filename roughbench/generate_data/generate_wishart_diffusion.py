@@ -15,7 +15,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from stochastax.manifolds.spd import SPDManifold
 from roughbench.manifold_rde.synthetic_wishart_diffusion import (
     make_wishart_parameters,
     simulate_wishart_diffusion,
@@ -30,6 +29,24 @@ from roughbench.generate_data.utils import (
     decorate_axes,
     finalize_plot,
 )
+
+
+def _vech(matrices: jax.Array) -> jax.Array:
+    dim = int(matrices.shape[-1])
+    i, j = np.tril_indices(dim)
+    return matrices[..., i, j]
+
+
+def _unvech(vectors: jax.Array) -> jax.Array:
+    m = int(vectors.shape[-1])
+    dim = int((np.sqrt(8 * m + 1) - 1) / 2)
+    if dim * (dim + 1) // 2 != m:
+        raise ValueError(f"Last axis must have triangular length. Got {m}.")
+    i, j = np.tril_indices(dim)
+    matrices = jnp.zeros(vectors.shape[:-1] + (dim, dim), dtype=vectors.dtype)
+    matrices = matrices.at[..., i, j].set(vectors)
+    matrices = matrices.at[..., j, i].set(vectors)
+    return matrices
 
 
 def _parse_args() -> argparse.Namespace:
@@ -114,7 +131,7 @@ def _plot_trace(
     )
     if diag_idx is None:
         # Fallback: reconstruct matrices if not 3x3 vech.
-        mats = SPDManifold.unvech(X_paths)  # (B,T,d,d)
+        mats = _unvech(X_paths)  # (B,T,d,d)
         traces = jnp.trace(mats, axis1=-2, axis2=-1)
     else:
         traces = jnp.sum(jnp.take(X_paths, diag_idx, axis=-1), axis=-1)
@@ -166,7 +183,7 @@ def _plot_eigenvalue_trajectories(
         k = min(int(max_paths), num_paths)
         idx = np.linspace(0, num_paths - 1, k, dtype=int)
 
-    mats = SPDManifold.unvech(X_paths[idx])  # (K,T,d,d)
+    mats = _unvech(X_paths[idx])  # (K,T,d,d)
     evals = jnp.linalg.eigvalsh(mats)  # (K,T,d), sorted ascending
 
     ts_np = np.asarray(ts)
@@ -261,9 +278,9 @@ def generate_wishart_diffusion_batch(
         t = int(X.shape[0])
         d = int(X.shape[-1])
 
-        # vech ordering must match SPDManifold.vech
+        # vech ordering uses row-major np.tril_indices.
         X_flat = X.reshape((t,) + (d, d))
-        vech = SPDManifold.vech(X_flat)  # (T,m)
+        vech = _vech(X_flat)  # (T,m)
 
         return vech, qv_vech
 

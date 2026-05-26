@@ -2,11 +2,10 @@ import jax
 import jax.numpy as jnp
 import pytest
 from roughbench.rde.rough_ou_process import rough_ou_process
-from stochastax.paths.paths import Path
 
 
 @pytest.fixture(scope="module")
-def rough_ou_samples() -> tuple[Path, dict]:
+def rough_ou_samples() -> tuple[jax.Array, dict]:
     """Generate and cache multiple rough OU process paths for reuse across tests."""
     seed = 42
     timesteps = 1000
@@ -49,7 +48,9 @@ def rough_ou_samples() -> tuple[Path, dict]:
     return paths, params
 
 
-def test_rough_ou_analytical_expectation(rough_ou_samples: tuple[Path, dict]) -> None:
+def test_rough_ou_analytical_expectation(
+    rough_ou_samples: tuple[jax.Array, dict],
+) -> None:
     r"""
     Test that the rough OU process matches the analytical expectation.
 
@@ -73,14 +74,14 @@ def test_rough_ou_analytical_expectation(rough_ou_samples: tuple[Path, dict]) ->
 
     for idx, t in zip(test_indices, times):
         # Empirical mean at time t
-        empirical_mean = jnp.mean(paths.path[:, idx, 0])
+        empirical_mean = jnp.mean(paths[:, idx, 0])
 
         # Theoretical expectation: E[X_t] = μ + (x0 - μ)e^(-θt)
         theoretical_mean = mu + (x0 - mu) * jnp.exp(-theta * t)
 
         # Standard error for the mean
-        std_dev = jnp.std(paths.path[:, idx, 0], ddof=1)
-        se = std_dev / jnp.sqrt(paths.path.shape[0])
+        std_dev = jnp.std(paths[:, idx, 0], ddof=1)
+        se = std_dev / jnp.sqrt(paths.shape[0])
 
         # Check within 3 standard errors
         assert jnp.abs(empirical_mean - theoretical_mean) <= 3.0 * se, (
@@ -91,13 +92,11 @@ def test_rough_ou_analytical_expectation(rough_ou_samples: tuple[Path, dict]) ->
 
 def test_rough_ou_path_structure() -> None:
     r"""
-    Test that the rough OU process returns a Path object with correct structure.
+    Test that the rough OU process returns an array with correct structure.
 
     Verifies:
-    - Returns a Path object
     - Path has correct shape (timesteps + 1, dim)
     - Initial condition is respected
-    - Interval is correct
     """
     key = jax.random.key(123)
     timesteps = 100
@@ -110,21 +109,11 @@ def test_rough_ou_path_structure() -> None:
 
     path = rough_ou_process(key, timesteps, dim, theta, mu, sigma, hurst, x0)
 
-    # Check it's a Path object
-    assert isinstance(path, Path)
-
     # Check shape: (timesteps + 1, dim)
-    assert path.path.shape == (timesteps + 1, dim)
+    assert path.shape == (timesteps + 1, dim)
 
     # Check initial condition
-    assert jnp.allclose(path.path[0, :], x0, atol=1e-6)
-
-    # Check interval
-    assert path.interval == (0, timesteps + 1)
-
-    # Check properties
-    assert path.num_timesteps == timesteps + 1
-    assert path.ambient_dimension == dim
+    assert jnp.allclose(path[0, :], x0, atol=1e-6)
 
 
 @pytest.mark.parametrize("hurst", [0.3, 0.5, 0.7])
@@ -167,10 +156,10 @@ def test_rough_ou_hurst_parameter(hurst: float) -> None:
     paths = vmap_rough_ou(keys)
 
     # Check shape
-    assert paths.path.shape == (num_paths, timesteps + 1, dim)
+    assert paths.shape == (num_paths, timesteps + 1, dim)
 
     # Check mean reversion towards mu
-    final_values = paths.path[:, -1, 0]
+    final_values = paths[:, -1, 0]
     empirical_mean = jnp.mean(final_values)
 
     # At t=1.0, with theta=1.0, the process should have moved significantly towards mu
@@ -275,7 +264,7 @@ def test_rough_ou_mean_reversion(theta: float, mu: float) -> None:
     paths = vmap_rough_ou(keys)
 
     # At late time (t=1.0), check mean
-    final_values = paths.path[:, -1, 0]
+    final_values = paths[:, -1, 0]
     empirical_mean = jnp.mean(final_values)
 
     # Theoretical expectation at t=1.0
@@ -321,4 +310,4 @@ def test_rough_ou_default_initial_condition() -> None:
     path = rough_ou_process(key, timesteps, dim, theta, mu, sigma, hurst)
 
     # Check that initial value is mu
-    assert jnp.allclose(path.path[0, :], mu, atol=1e-6)
+    assert jnp.allclose(path[0, :], mu, atol=1e-6)

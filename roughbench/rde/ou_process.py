@@ -1,7 +1,8 @@
 import diffrax as dfx
 import jax
 import jax.numpy as jnp
-from stochastax.controls.drivers import bm_driver
+
+from roughbench.drivers import bm_driver
 
 
 def ou_process(
@@ -37,7 +38,7 @@ def ou_process(
         x0: initial value (defaults to mu if not provided)
 
     Returns:
-        A Path object of shape (timesteps + 1, dim) representing the OU process.
+        Array of shape (timesteps + 1, dim) representing the OU process.
     """
     if theta <= 0:
         raise ValueError(f"theta must be positive. Got {theta}")
@@ -65,7 +66,7 @@ def ou_process(
         return sigma * jnp.eye(dim)
 
     # Create linear interpolation control from Brownian motion
-    bm_control = dfx.LinearInterpolation(ts=ts, ys=bm_path.path)
+    bm_control = dfx.LinearInterpolation(ts=ts, ys=bm_path)
 
     # Build the SDE terms
     terms = dfx.MultiTerm(
@@ -86,4 +87,4 @@ def ou_process(
     )
 
     assert solution.ys is not None
-    return solution.ys, (0, timesteps + 1)
+    return solution.ys

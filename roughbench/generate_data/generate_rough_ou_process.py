@@ -3,14 +3,13 @@ import jax.numpy as jnp
 import numpy as np
 from pathlib import Path
 from roughbench.rde.rough_ou_process import rough_ou_process
-from quicksig.drivers.drivers import fractional_bm_driver
-from utils import (
-    save_plot,
-    save_npz_compressed,
-    plotting_context,
-    create_figure,
-    decorate_axes,
+from roughbench.drivers import fractional_bm_driver
+from roughbench.generate_data.utils import (
+    draw_sde_paths,
     finalize_plot,
+    plotting_context,
+    save_npz_compressed,
+    save_plot,
 )
 
 
@@ -42,8 +41,8 @@ def generate_rough_ou_data(
     )(keys, timesteps, dim, theta, mu, sigma, hurst, x0)
 
     return {
-        "solution": jax.device_get(batched_rough_ou_paths.path),
-        "driver": jax.device_get(batched_fbm_drivers.path),
+        "solution": jax.device_get(batched_rough_ou_paths),
+        "driver": jax.device_get(batched_fbm_drivers),
     }
 
 
@@ -59,18 +58,21 @@ def plot_rough_ou_monte_carlo(
     output_dir: Path | None = None,
 ) -> None:
     """Plot rough OU process Monte Carlo paths."""
-    with plotting_context(font_scale=1.1) as plt:
-        _, ax = create_figure(figsize=(10.0, 6.0))
-        for i in range(batch_size):
-            ax.plot(
-                solution[i, :, 0],
-                linewidth=0.5,
-                alpha=0.15,
-                color="tab:blue",
-            )
-        ax.axhline(y=mu, color="red", linestyle="--", linewidth=2, label=f"Mean μ={mu}")
-        title = f"Rough Ornstein-Uhlenbeck (θ={theta}, μ={mu}, σ={sigma}, H={hurst}, N={timesteps}, batch={batch_size})"
-        decorate_axes(ax, title=title, xlabel="Time step", ylabel="Value", legend=True)
+    with plotting_context(font_scale=1.1, style="sde"):
+        ts = np.linspace(0.0, 1.0, timesteps + 1, dtype=np.float32)
+        title = (
+            f"Rough Ornstein-Uhlenbeck "
+            f"(theta={theta}, mu={mu}, sigma={sigma}, H={hurst}, N={timesteps}, paths={batch_size})"
+        )
+        draw_sde_paths(
+            times=ts,
+            paths=solution[:, :, 0],
+            suptitle=title,
+            ylabel="$X(t)$",
+            expectation=np.mean(solution[:, :, 0], axis=0),
+            marginal=True,
+            figsize=(12.0, 7.0),
+        )
         finalize_plot(tight_layout=True)
 
     save_plot(

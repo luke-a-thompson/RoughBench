@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use RoughBench in your work, please cite it using the metadata from this file."
+title: "RoughBench: A benchmark for rough path methods"
+authors:
+  - family-names: "Thompson"
+    given-names: "Luke"
+    email: "luke.thompson@sydney.edu.au"
+version: "0.1.2"
+license: "MIT"
+repository-code: "https://github.com/luke-a-thompson/roughbench"
+url: "https://github.com/luke-a-thompson/roughbench"
+abstract: "RoughBench is a benchmark dataset for machine learning on rough differential equations, implemented in JAX."
+keywords:
+  - jax
+  - rough-paths
+  - machine-learning
+  - time-series

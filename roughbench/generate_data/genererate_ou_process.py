@@ -3,10 +3,9 @@ from pathlib import Path
 import jax
 import jax.numpy as jnp
 import numpy as np
-from stochastax.controls.drivers import bm_driver
-from utils import (
-    create_figure,
-    decorate_axes,
+from roughbench.drivers import bm_driver
+from roughbench.generate_data.utils import (
+    draw_sde_paths,
     finalize_plot,
     plotting_context,
     save_npz_compressed,
@@ -43,8 +42,8 @@ def generate_ou_data(
     )(keys, timesteps, dim, theta, mu, sigma, x0)
 
     return {
-        "solution": jax.device_get(batched_ou_paths.path),
-        "driver": jax.device_get(batched_bm_drivers.path),
+        "solution": jax.device_get(batched_ou_paths),
+        "driver": jax.device_get(batched_bm_drivers),
     }
 
 
@@ -59,13 +58,21 @@ def plot_ou_monte_carlo(
     output_dir: Path | None = None,
 ) -> None:
     """Plot OU process Monte Carlo paths."""
-    with plotting_context(font_scale=1.1) as plt:
-        _, ax = create_figure(figsize=(10.0, 6.0))
-        for i in range(batch_size):
-            ax.plot(solution[i, :, 0], linewidth=0.5, alpha=0.15, color="tab:orange")
-        ax.axhline(y=mu, color="red", linestyle="--", linewidth=2, label=f"Mean μ={mu}")
-        title = f"Ornstein-Uhlenbeck (θ={theta}, μ={mu}, σ={sigma}, N={timesteps}, batch={batch_size})"
-        decorate_axes(ax, title=title, xlabel="Time step", ylabel="Value", legend=True)
+    with plotting_context(font_scale=1.1, style="sde"):
+        ts = np.linspace(0.0, 1.0, timesteps + 1, dtype=np.float32)
+        title = (
+            f"Ornstein-Uhlenbeck "
+            f"(theta={theta}, mu={mu}, sigma={sigma}, N={timesteps}, paths={batch_size})"
+        )
+        draw_sde_paths(
+            times=ts,
+            paths=solution[:, :, 0],
+            suptitle=title,
+            ylabel="$X(t)$",
+            expectation=np.mean(solution[:, :, 0], axis=0),
+            marginal=True,
+            figsize=(12.0, 7.0),
+        )
         finalize_plot(tight_layout=True)
 
     save_plot(

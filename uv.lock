@@ -131,6 +131,19 @@ wheels = [
 ]
 
 [[package]]
+name = "fbm"
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a9/52/a241755499462dd688858ccced125be3d338555b7a0e4d5f101236b91c71/fbm-0.3.0.tar.gz", hash = "sha256:4f1cf868a3af0bb0da88e7a87bfc8f868817af29e926b4bebcc96d4c362e72ee", size = 9472, upload-time = "2019-05-27T22:59:10.356Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/16/f8/f103aa4947ae83ce8e91c448c284ac71b88e449e5418c7baff69c7c51624/fbm-0.3.0-py2.py3-none-any.whl", hash = "sha256:8e03e230021f433d631dc289eecb6905a11a60eb6a89bd5a9dc4e66adcc22945", size = 9375, upload-time = "2019-05-27T22:59:08.986Z" },
+    { url = "https://files.pythonhosted.org/packages/33/14/69ba4b1b00790c2608a63cc695c93cef6d932ec83a7bba8cfa8245350f84/fbm-0.3.0-py3-none-any.whl", hash = "sha256:88d30a0851cbe72ba9c5cc1b668e9e1c49f460ace21cce6ebe7aa0b7f681d358", size = 9371, upload-time = "2019-05-27T23:00:44.572Z" },
+]
+
+[[package]]
 name = "fonttools"
 version = "4.61.1"
 source = { registry = "https://pypi.org/simple" }
@@ -880,9 +893,9 @@ version = "0.1.2"
 source = { editable = "." }
 dependencies = [
     { name = "diffrax" },
+    { name = "fbm" },
     { name = "jax", extra = ["cuda"] },
     { name = "pandas" },
-    { name = "stochastax" },
     { name = "tqdm" },
 ]
 
@@ -895,11 +908,11 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "diffrax", specifier = ">=0.7.0" },
+    { name = "fbm", specifier = ">=0.3.0" },
     { name = "jax", extras = ["cuda"], specifier = ">=0.8.1" },
     { name = "matplotlib", marker = "extra == 'dev'", specifier = ">=3.10.1" },
     { name = "pandas", specifier = ">=2.2.3" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.5" },
-    { name = "stochastax", git = "https://github.com/luke-a-thompson/Stochastax.git?rev=master" },
     { name = "tqdm", specifier = ">=4.67.1" },
 ]
 provides-extras = ["dev"]
@@ -972,15 +985,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/94/e7/b2c673351809dca68a0e064b6af791aa332cf192da575fd474ed7d6f16a2/six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81", size = 34031, upload-time = "2024-12-04T17:35:28.174Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274", size = 11050, upload-time = "2024-12-04T17:35:26.475Z" },
-]
-
-[[package]]
-name = "stochastax"
-version = "0.5.0"
-source = { git = "https://github.com/luke-a-thompson/Stochastax.git?rev=master#3775ec44649e3a8e673dc8b13552982b707459dd" }
-dependencies = [
-    { name = "diffrax" },
-    { name = "jax" },
 ]
 
 [[package]]

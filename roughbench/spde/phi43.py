@@ -6,11 +6,7 @@ from typing import Optional
 
 import numpy as np
 import jax
-from jax import config as jax_config
 import jax.numpy as jnp
-
-
-jax_config.update("jax_enable_x64", True)
 
 
 @dataclass(frozen=True)
@@ -166,7 +162,6 @@ def compute_C0_C1(params: SimParams) -> tuple[float, float, float, float, float]
     so there is no circular-aliasing contamination between the C11 and C12 parts.
     """
     N = params.N
-    M = params.M
     eps = params.eps
 
     centered_modes = _centered_mode_numbers(N)

@@ -3,18 +3,18 @@
 **RoughBench** is a benchmark dataset for machine learning on rough differential equations, implemented in JAX. It includes the following datasets:
 * An Ornstein-Uhlenbeck (OU) process under Brownian and fractional Brownian motion
 * The [Bonesini et al. (2026)](https://arxiv.org/abs/2412.21192) RDE framework for rough volatility models
-* A synthetic diffusion over the SPD manifold under the affine-invariant Riemmanian metric (AIRM)
+* A synthetic diffusion over the SPD manifold under the affine-invariant Riemannian metric (AIRM)
 * A synthetic SO(3) trajectory generator following that used in [Bastian, et al. (2025)](https://arxiv.org/html/2508.07775v1)
 * An implementation of a Kalman filter for parameter estimation which can be cast as a McKean-Vlasov mean-field RDE following [Coghi, et al. 2022](https://arxiv.org/abs/2107.06621)
-* A Jax implementation of the [Zhu, Zhu. (2015)](https://arxiv.org/abs/1508.05613) lattice approximation to the dynamical phi43 model from stochastic quantization
+* A JAX implementation of the [Zhu, Zhu. (2015)](https://arxiv.org/abs/1508.05613) lattice approximation to the dynamical phi43 model from stochastic quantization
 
 ## Installation
 
 ```bash
-pip install "roughbench @ git+https://github.com/luke-a-thompson/RoughBench.git"
+uv sync
 ```
 
-> **Note:** RoughBench depends on [Stochastax](https://github.com/luke-a-thompson/Stochastax) and JAX with CUDA support. Ensure your JAX installation matches your CUDA version before installing.
+> **Note:** RoughBench currently installs `jax[cuda]`. Ensure your JAX installation matches your CUDA version before installing, or adjust the JAX dependency for CPU-only environments.
 
 ## Quick Start
 
@@ -47,7 +47,7 @@ prices = solutions.ys[:, :, 0]
 Each model has a TOML config under `configs/rough_volatility/`. Generate Monte Carlo paths with:
 
 ```bash
-python -m roughbench.generate_data.generate_rough_volatility --config configs/rough_volatility/Bergomi.toml
+uv run python -m roughbench.generate_data.generate_rough_volatility --config configs/rough_volatility/Bergomi.toml
 ```
 
 A config looks like:
@@ -78,12 +78,13 @@ The `[model]` section sets the `family` (one of `black_scholes`, `bergomi`, `rou
 | Flag | Description |
 |---|---|
 | `--config PATH` | Path to TOML config (default: `configs/rough_volatility/rBergomi.toml`) |
+| `--all` | Generate every TOML config in the rough-volatility config directory |
 | `--seed INT` | Override random seed |
 | `--num-paths INT` | Override number of Monte Carlo paths |
 | `--output-dir PATH` | Override base output directory |
 | `--no-plot` | Skip diagnostic plots; only save `.npz` data |
 
-Outputs are written to `data/rough_volatility/<model>_data.npz` and diagnostic plots to `docs/rde_bench/rough_volatility/<model>_monte_carlo.png`.
+Outputs are written to `data/rough_volatility/<model>_data.npz` and diagnostic plots are mirrored to `docs/rde_bench/rough_volatility/<model>_monte_carlo.png`.
 
 ---
 
@@ -102,7 +103,7 @@ A batch of OU processes simulated with $\theta=0.5$, $\mu=0.0$, $\sigma=0.3$.
 ![Ornstein-Uhlenbeck Monte Carlo](docs/rde_bench/ou_processes/ou_process_monte_carlo.png)
 
 ### Rough OU (Driven by Fractional Brownian Motion)
-The rough OU process replaces standard Brownian motion $W_t$ with a fractional Brownian motion $B^H_t$ (with Hurst parameter $H < 0.5$), capturing rougher, more persistent path behavior:
+The rough OU process replaces standard Brownian motion $W_t$ with a fractional Brownian motion $B^H_t$ (with Hurst parameter $H \in (0, 1)$), capturing rougher or more persistent path behavior depending on $H$:
 $$
 dX_t = \theta (\mu - X_t)\, dt + \sigma\, dB^H_t.
 $$

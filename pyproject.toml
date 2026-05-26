@@ -24,7 +24,7 @@ classifiers = [
 dependencies = [
     "jax[cuda]>=0.8.1",
     "diffrax>=0.7.0",
-    "stochastax @ git+https://github.com/luke-a-thompson/Stochastax.git@master",
+    "fbm>=0.3.0",
     "pandas>=2.2.3",
     "tqdm>=4.67.1",
 ]

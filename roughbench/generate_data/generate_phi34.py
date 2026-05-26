@@ -10,7 +10,7 @@ from roughbench.spde.phi43 import (
     to_tcxyz,
     two_point_correlation,
 )
-from utils import save_npy
+from roughbench.generate_data.utils import save_npy
 
 
 def main() -> None:

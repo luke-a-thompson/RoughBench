@@ -7,8 +7,7 @@ from pathlib import Path
 import diffrax as dfx
 import jax
 import jax.numpy as jnp
-import jax.scipy.stats
-from stochastax.controls.drivers import (
+from roughbench.drivers import (
     bm_driver,
     correlate_bm_driver_against_reference,
     riemann_liouville_driver,
@@ -16,8 +15,7 @@ from stochastax.controls.drivers import (
 
 from roughbench.generate_data.utils import (
     config_section,
-    create_figure,
-    decorate_axes,
+    draw_sde_paths,
     finalize_plot,
     load_config,
     plotting_context,
@@ -157,7 +155,7 @@ def _build_external_variance_and_price_paths(
     ts = jnp.linspace(0.0, 1.0, noise_timesteps + 1)
 
     def _brownian_price_path(key: jax.Array) -> jax.Array:
-        return jnp.squeeze(bm_driver(key, noise_timesteps, 1).path)
+        return jnp.squeeze(bm_driver(key, noise_timesteps, 1))
 
     if mode == "constant":
         W_keys = jax.random.split(jax.random.PRNGKey(seed + 17), num_paths)
@@ -195,11 +193,11 @@ def _build_external_variance_and_price_paths(
     def _single(key: jax.Array) -> tuple[jax.Array, jax.Array]:
         key_w, key_b, key_v = jax.random.split(key, 3)
         W_path = bm_driver(key_w, noise_timesteps, 1)
-        W = jnp.squeeze(W_path.path)
+        W = jnp.squeeze(W_path)
         B_path = bm_driver(key_b, noise_timesteps, 1)
         correlated = correlate_bm_driver_against_reference(W_path, B_path, rho_eff)
         G = jnp.squeeze(
-            riemann_liouville_driver(key_v, noise_timesteps, hurst, correlated).path
+            riemann_liouville_driver(key_v, noise_timesteps, hurst, correlated)
         ) / gamma_h
         variance = v_0 * jnp.exp(
             surrogate_scale * G - 0.5 * (surrogate_scale**2) * variance_norm
@@ -397,125 +395,56 @@ def plot_bonesini_monte_carlo(
     use_log_price: bool = True,
     output_dir: Path | None = None,
 ) -> None:
-    ax_main = None
-    ax_marginal = None
-    with plotting_context(font_scale=1.1) as plt:
-        _, axs = create_figure(
-            nrows=1,
-            ncols=2,
+    with plotting_context(font_scale=1.1, style="sde"):
+        ts_paths = jnp.asarray(solution.ts)
+        ys_paths = jnp.asarray(solution.ys)
+        price_paths = ys_paths[..., 0] if ys_paths.ndim == 3 else ys_paths
+        paths = jnp.log(price_paths) if use_log_price else price_paths
+        times = ts_paths[0] if ts_paths.ndim == 2 else ts_paths
+        _, ax_main, ax_marginal = draw_sde_paths(
+            times=times,
+            paths=paths,
+            suptitle=str(model_spec.name),
+            ylabel=("Log-Price" if use_log_price else "Price"),
+            expectation=jnp.mean(paths, axis=0),
+            marginal=True,
             figsize=(12.0, 6.0),
-            gridspec_kw={"width_ratios": [3, 1]},
-        )
-        try:
-            ax_main, ax_marginal = axs  # type: ignore
-        except Exception:
-            try:
-                ax_main = axs[0]  # type: ignore
-                ax_marginal = axs[1]  # type: ignore
-            except Exception:
-                ax_main = axs  # type: ignore
-
-    ts_paths = jnp.asarray(solution.ts)
-    ys_paths = jnp.asarray(solution.ys)
-    final_values = []
-    initial_values = []
-    ax_var = None
-
-    for i in range(ts_paths.shape[0]):
-        ts = ts_paths[i]
-        ys = ys_paths[i]
-        S = ys if ys.ndim == 1 else ys[:, 0]
-        price_data = jnp.log(S) if use_log_price else S
-        if ax_main is not None:
-            ax_main.plot(ts, price_data, color="gray", alpha=0.6)
-        final_values.append(price_data[-1])
-        initial_values.append(price_data[0])
-
-        if ax_main is not None and plot_variance and ys.ndim > 1 and ys.shape[1] > 1:
-            if ax_var is None:
-                ax_var = ax_main.twinx()
-                ax_var.set_ylabel("Volatility State", color="tab:green")
-                ax_var.tick_params(axis="y", labelcolor="tab:green")
-            ax_var.plot(ts, ys[:, 1], color="tab:green", alpha=0.3)
-
-    mean_initial = float(jnp.mean(jnp.array(initial_values)))
-    mean_final = float(jnp.mean(jnp.array(final_values)))
-
-    if ax_main is not None:
-        price_label = "log" if use_log_price else "price"
-        ax_main.axhline(
-            y=mean_initial,
-            color="red",
-            linestyle="--",
-            alpha=0.8,
-            label=f"t=0 Mean ({price_label}): {mean_initial:.4f}",
-        )
-        ax_main.axhline(
-            y=mean_final,
-            color="blue",
-            linestyle="--",
-            alpha=0.8,
-            label=f"t=1 Mean ({price_label}): {mean_final:.4f}",
-        )
-        decorate_axes(
-            ax_main,
-            title=f"{model_spec.name} Monte Carlo",
-            xlabel="Time",
-            ylabel=("Log-Price" if use_log_price else "Price"),
-            legend=True,
         )
 
-    if ax_marginal is not None and final_values:
-        ax_marginal.hist(
-            final_values,
-            bins=30,
-            orientation="horizontal",
-            color="gray",
-            alpha=0.7,
-            density=True,
-        )
-        final_array = jnp.array(final_values)
-        mean_val = jnp.mean(final_array)
-        std_val = jnp.std(final_array)
-        y_range = jnp.linspace(mean_val - 3 * std_val, mean_val + 3 * std_val, 100)
-        normal_pdf = jax.scipy.stats.norm.pdf(y_range, mean_val, std_val)
-        ax_marginal.plot(
-            normal_pdf,
-            y_range,
-            color="red",
-            linestyle="--",
-            alpha=0.8,
-            label="Normal",
-        )
-        decorate_axes(
-            ax_marginal,
-            title=f"t=1 Marginal ({'log' if use_log_price else 'price'})",
-            xlabel="Density",
-            ylabel=("Log-Price" if use_log_price else "Price"),
-            legend=True,
-        )
-        if ax_main is not None:
+        if plot_variance and ys_paths.ndim == 3 and ys_paths.shape[-1] > 1:
+            ax_var = ax_main.twinx()
+            ax_var.set_ylabel("Volatility State", color="#00dfa2")
+            ax_var.tick_params(axis="y", labelcolor="#00dfa2")
+            for i in range(ys_paths.shape[0]):
+                ax_var.plot(
+                    times,
+                    ys_paths[i, :, 1],
+                    color="#00dfa2",
+                    alpha=0.2,
+                    linewidth=0.8,
+                )
+
+        if ax_marginal is not None:
             y_min, y_max = ax_main.get_ylim()
             ax_marginal.set_ylim(y_min, y_max)
-
-    finalize_plot(tight_layout=True)
-    save_plot(
-        filename=f"{model_spec.name.lower().replace(' ', '_')}_monte_carlo.png",
-        subdir="rough_volatility",
-        data_dir=output_dir,
-        dpi=200,
-    )
+        finalize_plot(tight_layout=True)
+        save_plot(
+            filename=f"{model_spec.name.lower().replace(' ', '_')}_monte_carlo.png",
+            subdir="rough_volatility",
+            data_dir=output_dir,
+            dpi=200,
+        )
 
     drivers = (
         jnp.stack([X_drivers, W_drivers], axis=-1)
         if X_drivers is not None and W_drivers is not None
-        else jnp.zeros((ys_paths.shape[0], 1, 2))
+        else jnp.zeros((jnp.asarray(solution.ys).shape[0], 1, 2))
     )
     save_npz(
         filename=f"{model_spec.name.lower().replace(' ', '_')}_data.npz",
         subdir="rough_volatility",
         data_dir=output_dir,
-        solution=ys_paths,
+        solution=jnp.asarray(solution.ys),
         driver=drivers,
     )
 
